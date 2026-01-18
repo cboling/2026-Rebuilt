@@ -1,0 +1,7 @@
+#
+# Bandit config file
+#
+exclude_dirs:
+ - ./.venv
+ - ./venv-test
+ - ./tests
