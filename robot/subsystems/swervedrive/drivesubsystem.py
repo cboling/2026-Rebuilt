@@ -21,39 +21,34 @@ from collections import OrderedDict
 from typing import Callable
 from typing import Tuple, Optional, List, Dict, Sequence, Any
 
-from generated.tuner_constants import TunerConstants
-import ntcore
-import robotpy_apriltag as apriltag
-from commands2 import Command, Subsystem, InstantCommand
+from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
 from pathplannerlib.auto import AutoBuilder, RobotConfig
-from pathplannerlib.commands import DriveFeedforwards
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 from phoenix6 import SignalLogger, swerve, units, utils
+from phoenix6.swerve.requests import RobotCentric, FieldCentric
 from phoenix6.swerve.swerve_module import SwerveModule
 from pykit.autolog import autolog_output, autologgable_output
 from pykit.logger import Logger
 from pykit.networktables.loggeddashboardchooser import LoggedDashboardChooser
 from wpilib import DriverStation, Notifier, RobotController
-from wpilib import SmartDashboard, Field2d, RobotBase, Timer
+from wpilib import SmartDashboard, Field2d, RobotBase
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d
-from wpimath.geometry import Transform2d, Transform3d, Translation3d, Rotation3d
 from wpimath.kinematics import ChassisSpeeds, SwerveDrive4Kinematics, SwerveModuleState, \
     SwerveModulePosition
 from wpimath.units import degrees, inchesToMeters, rotationsToRadians, meters_per_second, radians_per_second
-from phoenix6.swerve.requests import RobotCentric, FieldCentric
 
 from constants import USE_PYKIT, JOYSTICK_DEADBAND
-from field.field import RED_TEST_POSE, BLUE_TEST_POSE, FIELD_Y_SIZE, FIELD_X_SIZE
+from field.field import RED_TEST_POSE, BLUE_TEST_POSE
+from generated.tuner_constants import TunerConstants
 from generated.tuner_constants import TunerSwerveDrivetrain
-from subsystems import constants
-from subsystems.swervedrive import swerveutils
-from subsystems.swervedrive.constants import DriveConstants
 from lib_6107.subsystems.gyro.gyro import Gyro
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
 from lib_6107.subsystems.pykit.swervedrive_io import SwerveDriveIO
+from subsystems import constants
+from subsystems.swervedrive.constants import DriveConstants
 
 try:
     import navx
@@ -820,32 +815,41 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
            (Front Left, Front Right, Rear Left, Rear Right)
         """
-        # from phoenix6.controls.velocity_duty_cycle import  VelocityDutyCycle
-        # from phoenix6.controls.position_duty_cycle import PositionDutyCycle
-        from phoenix6.controls import VelocityDutyCycle, VelocityVoltage, MotionMagicVoltage, \
-            PositionDutyCycle  # Import relevant control requests
-        from phoenix6.swerve import SwerveModule, SwerveModuleState
-        from phoenix6.signals import NeutralModeValue
+        from phoenix6.controls import VelocityTorqueCurrentFOC, PositionVoltage
 
-        max_speed = TunerConstants.speed_at_12_volts * self.drive_scale_factor
-        module_states = SwerveDrive4Kinematics.desaturateWheelSpeeds(module_states, max_speed)
+        angle_setter: PositionVoltage = PositionVoltage(0, 0, enable_foc=False, override_brake_dur_neutral=False)
+        velocity_setter: VelocityTorqueCurrentFOC = VelocityTorqueCurrentFOC(0, 0)
+        ticks_per_revolution = 4096
+        wheel_radius: units.meter = inchesToMeters(2)
+        wheel_circumference_meters = math.pi * wheel_radius * 2
 
-        drive_request = VelocityVoltage(0, enable_foc=False)
-        steer_request = None
+        try:
+            # private VelocityTorqueCurrentFOC m_velocitySetter = new VelocityTorqueCurrentFOC(0);
+            for index, module in enumerate(self.modules):
+                drive_motor = module.drive_motor
+                steer_motor = module.steer_motor
 
-        for index, module in enumerate(self.modules):
-            state: SwerveModuleState = module_states[index]
-            state.optimize(module.get_current_state().angle)
+                state: SwerveModuleState = module_states[index]
+                state.optimize(module.get_current_state().angle)
 
-            wheel_radius: units.meter = inchesToMeters(2)
-            wheel_circumference_meters = math.pi * wheel_radius * 2
+                # Convert linear speed (m/s) to wheel rotations per second (RPS)
+                wheel_rps = state.speed / wheel_circumference_meters
+                angle_to_set = (state.angle.degrees() / 360.0) * ticks_per_revolution
 
-            # Convert linear speed (m/s) to wheel rotations per second (RPS)
-            wheel_rps = state.speed / wheel_circumference_meters
+                steer_motor.set_control(angle_setter.with_position(angle_to_set))
+                drive_motor.set_control(velocity_setter.with_velocity(wheel_rps))
 
-            module.apply(drive_request.with_velocity(wheel_rps),
-                         steer_request.with_angular_position(state.angle.radians))
+        except Exception as _e:
+            pass
 
+    # public void apply(SwerveModuleState state) {
+    #     var optimized = SwerveModuleState.optimize(state, m_internalState.angle);
+    #
+    #     double angleToSetDeg = optimized.angle.getRotations();
+    #     m_steerMotor.setControl(m_angleSetter.withPosition(angleToSetDeg));
+    #     double velocityToSet = optimized.speedMetersPerSecond * m_driveRotationsPerMeter;
+    #     m_driveMotor.setControl(m_velocitySetter.withVelocity(velocityToSet));
+    # }
 
     @property
     def drive_scale_factor(self) -> float:
