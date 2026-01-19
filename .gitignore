@@ -230,3 +230,4 @@ robot/*.json
 /robot/deploy/swerve/
 /robot/ctre_sim/
 /vendordeps/WPILibNewCommands.json
+/robot/logs/
