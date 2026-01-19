@@ -16,23 +16,28 @@
 # ------------------------------------------------------------------------ #
 # From Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
 
+from typing import Optional
+
 from commands2 import Command
 
 from wpimath.geometry import Rotation2d, Pose2d, Translation2d
-
+from wpimath.units import degrees
 
 class ResetXY(Command):
-    def __init__(self, x, y, heading_degrees, drivetrain):
+    def __init__(self, drivetrain: 'DriveSubsystem',
+                 x: Optional[float | int] = 0,
+                 y: Optional[float | int] = 0,
+                 heading: Optional[degrees] = 0.0):
         """
         Reset the starting (X, Y) and heading (in degrees) of the robot to where they should be.
         :param x: X
         :param y: X
-        :param heading_degrees: heading (for example: 0 = "North" of the field, 180 = "South" of the field)
+        :param heading: heading (for example: 0 = "North" of the field, 180 = "South" of the field)
         :param drivetrain: drivetrain on which the (X, Y, heading) should be set
         """
         super().__init__()
         self.drivetrain = drivetrain
-        self.position = Pose2d(Translation2d(x, y), Rotation2d.fromDegrees(heading_degrees))
+        self.position = Pose2d(Translation2d(x, y), Rotation2d.fromDegrees(heading))
         self.addRequirements(drivetrain)
 
     def initialize(self):

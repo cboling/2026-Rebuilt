@@ -21,15 +21,16 @@
 # the WPILib BSD license file in the root directory of this project.
 #
 
+from typing import Callable, Optional
+
 import math
 
-import commands2
+from commands2 import Command
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d, Translation2d
 
 from subsystems.swervedrive.constants import AutoConstants
 from subsystems.swervedrive.constants import DriveConstants
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 
 
@@ -42,30 +43,35 @@ class GoToPointConstants:
     kOversteerAdjustment = 0.5
 
 
-class GoToPoint(commands2.Command):
-    def __init__(self, x, y, drivetrain: DriveSubsystem, speed=1.0, slowDownAtFinish=True,
-                 finishDirection=None) -> None:
+class GoToPoint(Command):
+    def __init__(self, drivetrain: 'DriveSubsystem',
+                 x: Optional[int | float] = 0,
+                 y: Optional[int | float] = 0,
+                 speed: Optional[float] = 1.0,
+                 slow_down_at_finish: Optional[bool] = True,
+                 finish_direction: Optional[Rotation2d] = None) -> None:
         """
         Go to a point with (X, Y) coordinates. Whether this is the end of your trajectory or not.
         :param x:
         :param y:
         :param drivetrain:
         :param speed: between -1.0 and +1.0 (you can use negative speed to drive backwards)
-        :param finishDirection: Rotation2d for robot direction at the finish point, example: Rotation2d.fromDegrees(-70)
-        :param slowDownAtFinish:
+        :param finish_direction: Rotation2d for robot direction at the finish point, example: Rotation2d.fromDegrees(-70)
+        :param slow_down_at_finish:
         """
         super().__init__()
+
         self.targetPosition = Translation2d(x, y)
         self.initialPosition = None
         self.speed = speed
-        self.stop = slowDownAtFinish
+        self.stop = slow_down_at_finish
         self.desiredEndDirection = None
         self.initialDistance = None
         self.pointingInGoodDirection = False
         self.drivetrain = drivetrain
         self.addRequirements(drivetrain)
 
-        self.finishDirection = finishDirection
+        self.finishDirection = finish_direction
         if self.speed < 0 and self.finishDirection is not None:
             self.finishDirection = self.finishDirection.rotateBy(GoToPoint.REVERSE_DIRECTION)
 
@@ -124,7 +130,7 @@ class GoToPoint(commands2.Command):
         # 4. now when we know the desired direction, we can compute the turn speed
         rotateSpeed = abs(self.speed)
         proportionalRotateSpeed = AimToDirectionConstants.kP * abs(degreesRemaining)
-        if AimToDirectionConstants.kUseSqrtControl:
+        if AimToDirectionConstants.USE_SQRT_CONTROL:
             proportionalRotateSpeed = math.sqrt(
                 0.5 * proportionalRotateSpeed)  # will match the non-sqrt value when 50% max speed
         if rotateSpeed > proportionalRotateSpeed:

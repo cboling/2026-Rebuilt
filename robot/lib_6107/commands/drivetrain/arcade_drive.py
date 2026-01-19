@@ -16,29 +16,47 @@
 # ------------------------------------------------------------------------ #
 # From Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
 
-from __future__ import annotations
+from typing import Optional
 
-import commands2
+from commands2 import Command
+from wpimath.units import meters_per_second, radians_per_second
+
+from pathplannerlib.auto import NamedCommands
 
 
-class ArcadeDrive(commands2.Command):
-    def __init__(self, driveSpeed, rotationSpeed, drivetrain, assumeManualInput=False):
+class ArcadeDrive(Command):
+    def __init__(self, drivetrain: 'DriveSubsystem',
+                 drive_speed: Optional[meters_per_second] = 0.0,
+                 rotation_speed: Optional[radians_per_second] = 0.0,
+                 assume_manual_input: Optional[bool] = False):
         """
-        Drive the robot at `driveSpeed` and `rotationSpeed` until this command is terminated.
+        Drive the robot at `drive_speed` and `rotation_speed` until this command is terminated.
         """
         super().__init__()
 
-        self.driveSpeed = driveSpeed
-        if not callable(driveSpeed):
-            self.driveSpeed = lambda: driveSpeed
+        self._drive_speed = drive_speed
+        if not callable(drive_speed):
+            self._drive_speed = lambda: drive_speed
 
-        self.rotationSpeed = rotationSpeed
-        if not callable(rotationSpeed):
-            self.rotationSpeed = lambda: rotationSpeed
+        self._rotation_speed = rotation_speed
+        if not callable(rotation_speed):
+            self._rotation_speed = lambda: rotation_speed
 
-        self.assumeManualInput = assumeManualInput
-        self.drivetrain = drivetrain
+        self._assume_manual_input = assume_manual_input
+        self._drivetrain = drivetrain
         self.addRequirements(drivetrain)
+
+    @staticmethod
+    def pathplanner_register(drivetrain: 'DriveSubsystem') -> None:
+        """
+        This command factory can be used with register this command
+        and make it available from within PathPlanner
+        """
+        def _cmd(**kwargs) -> Command:
+            return ArcadeDrive(drivetrain, **kwargs)
+
+        # Register the function itself
+        NamedCommands.registerCommand("ArcadeDrive", _cmd)
 
     def initialize(self):
         pass
@@ -47,10 +65,12 @@ class ArcadeDrive(commands2.Command):
         return False  # never finishes, you should use it with "withTimeout(...)"
 
     def execute(self):
-        driveSpeed = self.driveSpeed()  # get the drive speed from the joystick or wherever it comes from
-        rotationSpeed = self.rotationSpeed()  # get the turn speed from the joystick or wherever it comes from
-        self.drivetrain.arcade_drive(driveSpeed, rotationSpeed, assume_manual_input=self.assumeManualInput,
-                                     field_relative=True)
+        drive_speed = self._drive_speed()        # get the drive speed from the joystick or wherever it comes from
+        rotation_speed = self._rotation_speed()  # get the turn speed from the joystick or wherever it comes from
+        self._drivetrain.arcade_drive(drive_speed,
+                                      rotation_speed,
+                                      assume_manual_input=self._assume_manual_input,
+                                      field_relative=True)
 
     def end(self, interrupted: bool):
-        self.drivetrain.stop()  # stop at the end
+        self._drivetrain.stop()  # stop at the end

@@ -157,7 +157,7 @@ class FollowObject(commands2.Command):
         if self.stopWhen is not None:
             if not self.drivingAllowed and abs(x) < self.stopWhen.aimingToleranceDegrees:
                 turnVelocity = self.drivetrain.getTurnRate()
-                if abs(turnVelocity) < AimToDirectionConstants.kAngleVelocityToleranceDegreesPerSec:
+                if abs(turnVelocity) < AimToDirectionConstants.ANGLE_VELOCITY_TOLERANCE_DEGREES_PER_SEC:
                     print(f"FollowObject: finished, the object is pretty close (x={x}, turnVelocity={turnVelocity})")
                     self.finished = True  # already aiming at it pretty well and not allowed to move to it
                     return
@@ -191,9 +191,9 @@ class StopWhen:
         self.maxSize = maxSize
         assert maxSize > 0, f"only positive values allowed for maxSize (not StopWhen(maxSize={maxSize}))"
         self.aimingToleranceDegrees = aimingToleranceDegrees
-        assert aimingToleranceDegrees >= AimToDirectionConstants.kAngleToleranceDegrees, (
+        assert aimingToleranceDegrees >= AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES, (
             "angleToleranceDegrees={} is not achievable since it is under {}"
-        ).format(aimingToleranceDegrees, AimToDirectionConstants.kAngleToleranceDegrees)
+        ).format(aimingToleranceDegrees, AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES)
         self.secondsNotSeen = secondsNotSeen
         assert self.secondsNotSeen > 0, f"invalid secondsNotSeen in StopWhen(secondsNotSeen={secondsNotSeen}), must>0"
 

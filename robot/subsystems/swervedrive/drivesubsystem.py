@@ -47,6 +47,7 @@ from generated.tuner_constants import TunerConstants
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
+from lib_6107.commands import pathplanner
 from lib_6107.subsystems.pykit.swervedrive_io import SwerveDriveIO
 from subsystems import constants
 from subsystems.swervedrive.constants import DriveConstants
@@ -137,11 +138,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
         self._container = container
         self._robot = container.robot
-
-        # self.kinematics: SwerveDrive4Kinematics = DriveConstants.DRIVE_KINEMATICS  # our swerve drive kinematics
-
-        # Init the Auto chooser.  PathPlanner init will fill in our choices
-        self.autoChooser: LoggedDashboardChooser[Command] = LoggedDashboardChooser("Auto Choices")
 
         # Camera/localizer defaults
         self.front_camera = None
@@ -345,10 +341,15 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._sys_id_routine_to_apply = self._sys_id_routine_translation
         """The SysId routine to test"""
 
+        # Init the Auto chooser.  PathPlanner init will fill in our choices
+        self.autoChooser: LoggedDashboardChooser[Command] = LoggedDashboardChooser("Auto Choices")
+
+        self._configure_auto_builder()
+
+
         if utils.is_simulation():
             self._start_sim_thread()
 
-        self._configure_auto_builder()
 
     @property
     def drive_request(self) -> swerve.requests.FieldCentric:
@@ -369,9 +370,10 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     def _configure_auto_builder(self):
         config = RobotConfig.fromGUISettings()
         AutoBuilder.configure(
-            lambda: self.get_state().pose,  # Supplier of current robot pose
-            self.reset_pose,  # Consumer for seeding pose against auto
+            lambda: self.get_state().pose,    # Supplier of current robot pose
+            self.reset_pose,                  # Consumer for seeding pose against auto
             lambda: self.get_state().speeds,  # Supplier of current robot speeds
+
             # Consumer of ChassisSpeeds and feedforwards to drive the robot
             lambda speeds, feedforwards: self.set_control(
                 self._apply_robot_speeds
@@ -390,6 +392,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
             self  # Subsystem for requirements
         )
+        # Register all the library 'named' commands we may wish to use
+        self._auto_chooser = pathplanner.register_commands_and_triggers(self)
+
         # TODO: AdvantangeScope support below
         # # PathPlannerLogging.setLogActivePathCallback(lambda path: Logger.recordOutput("Odometry/Trajectory",
         # #                                                                              path))

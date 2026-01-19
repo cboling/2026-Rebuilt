@@ -4,14 +4,12 @@
 # the WPILib BSD license file in the root directory of this project.
 #
 
-from __future__ import annotations
-
 import math
-import typing
+from typing import Optional
 
 import commands2
-from commands.aimtodirection import AimToDirectionConstants
-from commands.gotopoint import GoToPointConstants
+from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
+from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 from wpilib import Timer, SmartDashboard, SendableChooser
 from wpimath.geometry import Rotation2d, Translation2d
 
@@ -55,21 +53,19 @@ class Tunable:
 
 class ApproachTag(commands2.Command):
 
-    def __init__(
-            self,
-            camera,
-            drivetrain,
-            specificHeadingDegrees=None,
-            speed=1.0,
-            reverse=False,
-            settings: dict | None = None,
-            pushForwardSeconds=0.0,  # length of final approach
-            pushForwardMinDistance=0.0,  # length of final approach in minimum distance
-            finalApproachObjSize=10.0,
-            detectionTimeoutSeconds=2.0,
-            cameraMinimumFps=4.0,
-            dashboardName=""
-    ):
+    def __init__(self, drivetrain,
+                 camera,
+                 specificHeadingDegrees=None,
+                 speed=1.0,
+                 reverse=False,
+                 settings: dict | None = None,
+                 pushForwardSeconds=0.0,  # length of final approach
+                 pushForwardMinDistance=0.0,  # length of final approach in minimum distance
+                 finalApproachObjSize=10.0,
+                 detectionTimeoutSeconds=2.0,
+                 cameraMinimumFps=4.0,
+                 dashboardName=""
+        ):
         """
         Align the swerve robot to AprilTag precisely and then optionally slowly push it forward for a split second
         :param camera: camera to use, LimelightCamera or PhotonVisionCamera (from https://github.com/epanov1602/CommandRevSwerve/blob/main/docs/Adding_Camera.md)
@@ -424,7 +420,7 @@ class ApproachTag(commands2.Command):
         reachedNow = (
                 distanceToGlidePath is not None and
                 abs(distanceToGlidePath) < self.GLIDE_PATH_WIDTH_INCHES.value * 0.0254 * 0.5 and
-                abs(degreesLeftToRotate) < 4 * AimToDirectionConstants.kAngleToleranceDegrees
+                abs(degreesLeftToRotate) < 4 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES
         )
         if self.tReachedGlidePath and not reachedNow:
             print(f"WARNING: not on glide path anymore (distance={distanceToGlidePath}, degrees={degreesLeftToRotate}")
@@ -624,7 +620,7 @@ class ApproachManually(commands2.Command):
 
         # 2. proportional control: if we are almost finished turning, use slower turn speed (to avoid overshooting)
         proportionalSpeed = self.KPMULT_ROTATION.value * AimToDirectionConstants.kP * abs(degreesRemaining)
-        if AimToDirectionConstants.kUseSqrtControl:
+        if AimToDirectionConstants.USE_SQRT_CONTROL:
             proportionalSpeed = math.sqrt(0.5 * proportionalSpeed)  # will match the non-sqrt value when 50% max speed
 
         # 3. if target angle is on the right, we should really turn right (negative turn speed)
@@ -665,7 +661,7 @@ class ApproachManually(commands2.Command):
     def computeProportionalSpeed(self, distance) -> float:
         kpMultTran = self.KPMULT_TRANSLATION.value
         velocity = distance * GoToPointConstants.kPTranslate * kpMultTran
-        if GoToPointConstants.kUseSqrtControl:
+        if GoToPointConstants.USE_SQRT_CONTROL:
             velocity = math.sqrt(0.5 * velocity * kpMultTran)
         if velocity > 1.0:
             velocity = 1.0

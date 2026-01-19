@@ -506,7 +506,7 @@ class RobotContainer:
                                   stopWhen=StopWhen(maxSize=8.0),
                                   speed=0.2)  # TODO: Increase speed once we know it works as expected
 
-        drive_forward = ArcadeDrive(driveSpeed=0.15, rotationSpeed=0.0,
+        drive_forward = ArcadeDrive(drive_speed=0.15, rotation_speed=0.0,
                                     drivetrain=self.robot_drive).withTimeout(0.3)  # Keep speed low here..
 
         # Drop corral command (not yet coded)

@@ -43,6 +43,7 @@ if USE_PYKIT:
 else:
     from commands2 import TimedCommandRobot as MyRobotBase
 
+from phoenix6 import HootAutoReplay
 
 # Setup Logging
 logger = logging.getLogger(__name__)
@@ -161,6 +162,13 @@ class MyRobot(MyRobotBase):
         self._container = RobotContainer(self)
         self.disabledTimer = wpilib.Timer()
 
+        # log and replay timestamp and joystick data
+        self._time_and_joystick_replay = (
+            HootAutoReplay()
+            .with_timestamp_replay()
+            .with_joystick_replay()
+        )
+
     def robotPeriodic(self) -> None:
         """
         Periodic code for all modes should go here.
@@ -172,7 +180,9 @@ class MyRobot(MyRobotBase):
 
         Default period is 20 mS.
         """
-        logger.debug(f"called robotPeriodic: enabled: {self.isEnabled()}")
+        self._time_and_joystick_replay.update()
+        super().robotPeriodic()
+
         self._counter += 1
 
     def disabledInit(self) -> None:

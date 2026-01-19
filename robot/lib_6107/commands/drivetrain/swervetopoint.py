@@ -27,13 +27,12 @@ import commands2
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d, Translation2d, Pose2d
 
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 
 
 class SwerveToPoint(commands2.Command):
-    def __init__(self, x, y, headingDegrees, drivetrain: DriveSubsystem, speed=1.0, slowDownAtFinish=True,
+    def __init__(self, x, y, headingDegrees, drivetrain: 'DriveSubsystem', speed=1.0, slowDownAtFinish=True,
                  rate_limit=False) -> None:
         super().__init__()
         self.targetPose = None
@@ -91,7 +90,7 @@ class SwerveToPoint(commands2.Command):
 
         degreesLeftToTurn = self.getDegreesLeftToTurn()
         turningSpeed = abs(degreesLeftToTurn) * AimToDirectionConstants.kP
-        if AimToDirectionConstants.kUseSqrtControl:
+        if AimToDirectionConstants.USE_SQRT_CONTROL:
             turningSpeed = math.sqrt(0.5 * turningSpeed)  # will match the non-sqrt value when 50% max speed
         if turningSpeed > abs(self.speed):
             turningSpeed = abs(self.speed)
@@ -126,7 +125,7 @@ class SwerveToPoint(commands2.Command):
 
         if self.overshot:
             distanceFromTargetDirectionDegrees = self.getDegreesLeftToTurn()
-            if abs(distanceFromTargetDirectionDegrees) < 3 * AimToDirectionConstants.kAngleToleranceDegrees:
+            if abs(distanceFromTargetDirectionDegrees) < 3 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES:
                 SmartDashboard.putString("command/c" + self.__class__.__name__, "completed")
                 return True  # case 2: overshot in distance and target direction is correct
 

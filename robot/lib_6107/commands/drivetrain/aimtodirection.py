@@ -21,91 +21,104 @@
 # the WPILib BSD license file in the root directory of this project.
 #
 import math
-import typing
+from typing import Callable, Optional
 
 import commands2
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
+from wpimath.units import degrees, meters_per_second
 
 from subsystems.swervedrive.constants import AutoConstants
 
-
 class AimToDirectionConstants:
     kP = 0.001  # 0.002 is the default, but you must calibrate this to your robot
-    kUseSqrtControl = AutoConstants.USE_SQRT_CONTROL
+    USE_SQRT_CONTROL = AutoConstants.USE_SQRT_CONTROL
 
-    kMinTurnSpeed = 0.025  # turning slower than this is unproductive for the motor (might not even spin)
-    kAngleToleranceDegrees = 4.0  # plus minus 3 degrees is "close enough"
-    kAngleVelocityToleranceDegreesPerSec = 1  # velocity under 100 degrees/second is considered "stopped"
+    MIN_TURN_SPEED = 0.025  # turning slower than this is unproductive for the motor (might not even spin)
+    ANGLE_TOLERANCE_DEGREES = 4.0  # plus minus 3 degrees is "close enough"
+    ANGLE_VELOCITY_TOLERANCE_DEGREES_PER_SEC = 1  # velocity under 100 degrees/second is considered "stopped"
 
 
 class AimToDirection(commands2.Command):
-    def __init__(self, degrees: float | typing.Callable[[], float], drivetrain, speed=1.0, fwd_speed=0.0):
+    def __init__(self, drivetrain: 'DriveSubsystem',
+                 degrees: Optional[degrees | Callable[[], degrees]],
+                 speed: Optional[float] = 1.0,
+                 fwd_speed: Optional[float] = 0.0):
         super().__init__()
 
-        self.drivetrain = drivetrain
+        self._drivetrain: 'DriveSubsystem' = drivetrain
         self.addRequirements(drivetrain)
 
-        self.speed = min((1.0, abs(speed)))
-        self.targetDirection = None
-        self.fwdSpeed = fwd_speed
+        self._speed = min((1.0, abs(speed)))
+        self._target_direction = None
+        self._fwd_speed = fwd_speed
 
         # setting the target angle in a way that works for all cases
-        self.targetDegrees = degrees
+        self._target_degrees = degrees
+
         if degrees is None:
-            self.targetDegrees = lambda: self.drivetrain.heading.degrees()
+            self._target_degrees = lambda: self._drivetrain.heading.degrees()
+
         elif not callable(degrees):
-            self.targetDegrees = lambda: degrees
+            self._target_degrees = lambda: degrees
 
     def initialize(self):
-        self.targetDirection = Rotation2d.fromDegrees(self.targetDegrees())
+        self._target_direction = Rotation2d.fromDegrees(self._target_degrees())
         SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
 
     def execute(self):
         # 1. how many degrees are left to turn?
-        currentDirection = self.drivetrain.heading
-        rotationRemaining = self.targetDirection - currentDirection
-        degreesRemaining = rotationRemaining.degrees()
+        current_direction = self._drivetrain.heading
+        rotation_remaining = self._target_direction - current_direction
+        degrees_remaining = rotation_remaining.degrees()
 
         # (do not turn left 350 degrees if you can just turn right -10 degrees, and vice versa)
-        while degreesRemaining > 180:
-            degreesRemaining -= 360
-        while degreesRemaining < -180:
-            degreesRemaining += 360
+        while degrees_remaining > 180:
+            degrees_remaining -= 360
+
+        while degrees_remaining < -180:
+            degrees_remaining += 360
 
         # 2. proportional control: if we are almost finished turning, use slower turn speed (to avoid overshooting)
-        turnSpeed = self.speed
-        proportionalSpeed = AimToDirectionConstants.kP * abs(degreesRemaining)
-        if AimToDirectionConstants.kUseSqrtControl:
-            proportionalSpeed = math.sqrt(0.5 * proportionalSpeed)  # will match the non-sqrt value when 50% max speed
-        if turnSpeed > proportionalSpeed:
-            turnSpeed = proportionalSpeed
-        if turnSpeed < AimToDirectionConstants.kMinTurnSpeed and self.fwdSpeed == 0:
-            turnSpeed = AimToDirectionConstants.kMinTurnSpeed  # but not too small
+        turn_speed = self._speed
+        proportional_speed = AimToDirectionConstants.kP * abs(degrees_remaining)
+
+        if AimToDirectionConstants.USE_SQRT_CONTROL:
+            proportional_speed = math.sqrt(0.5 * proportional_speed)  # will match the non-sqrt value when 50% max speed
+
+        if turn_speed > proportional_speed:
+            turn_speed = proportional_speed
+
+        if turn_speed < AimToDirectionConstants.MIN_TURN_SPEED and self._fwd_speed == 0:
+            turn_speed = AimToDirectionConstants.MIN_TURN_SPEED  # but not too small
 
         # 3. act on it! if target angle is on the right, turn right
-        if degreesRemaining > 0:
-            self.drivetrain.arcade_drive(self.fwdSpeed, +turnSpeed)
+        if degrees_remaining > 0:
+            self._drivetrain.arcade_drive(self._fwd_speed, +turn_speed)
         else:
-            self.drivetrain.arcade_drive(self.fwdSpeed, -turnSpeed)  # otherwise, turn left
+            self._drivetrain.arcade_drive(self._fwd_speed, -turn_speed)  # otherwise, turn left
 
     def end(self, interrupted: bool):
-        self.drivetrain.stop()
+        self._drivetrain.stop()
+
         if interrupted:
             SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
 
     def isFinished(self) -> bool:
-        if self.fwdSpeed != 0:
+        if self._fwd_speed != 0:
             return False  # if someone wants us to drive forward while aiming, then we are never finished
 
-        currentDirection = self.drivetrain.heading
-        rotationRemaining = self.targetDirection - currentDirection
-        degreesRemaining = rotationRemaining.degrees()
+        current_direction = self._drivetrain.heading
+        rotation_remaining = self._target_direction - current_direction
+        degrees_remaining = rotation_remaining.degrees()
 
         # if we are pretty close to the direction we wanted, consider the command finished
-        if abs(degreesRemaining) < AimToDirectionConstants.kAngleToleranceDegrees:
-            turnVelocity = self.drivetrain.gyro.turn_rate_degrees_per_second
+        if abs(degrees_remaining) < AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES:
+            turn_velocity = self._drivetrain.gyro.turn_rate_degrees_per_second
             SmartDashboard.putString("command/c" + self.__class__.__name__, "good angle")
-            if abs(turnVelocity) < AimToDirectionConstants.kAngleVelocityToleranceDegreesPerSec:
+
+            if abs(turn_velocity) < AimToDirectionConstants.ANGLE_VELOCITY_TOLERANCE_DEGREES_PER_SEC:
                 SmartDashboard.putString("command/c" + self.__class__.__name__, "completed")
                 return True
+
+        return False

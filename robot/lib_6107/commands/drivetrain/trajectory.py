@@ -215,7 +215,7 @@ class JerkyTrajectory(commands2.Command):
         if not self.swerve or (not last and self.swerve == "last-point"):
             # use arcade drive, if we aren't allowed to use swerve (or not allowed to use swerve for non-end points)
             command = GoToPoint(
-                point.x, point.y, drivetrain=self.drivetrain, speed=self.speed, slowDownAtFinish=slowdown
+                point.x, point.y, drivetrain=self.drivetrain, speed=self.speed, slow_down_at_finish=slowdown
             )
         else:
             command = SwerveToPoint(
