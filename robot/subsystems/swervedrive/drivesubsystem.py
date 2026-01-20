@@ -40,14 +40,13 @@ from wpimath.kinematics import ChassisSpeeds, SwerveModuleState, \
     SwerveModulePosition
 from wpimath.units import degrees, inchesToMeters, rotationsToRadians, meters_per_second, radians_per_second
 
-from constants import USE_PYKIT, JOYSTICK_DEADBAND
+from constants import USE_PYKIT, JOYSTICK_DEADBAND, MAX_SPEED
 from field.field import FIELD_Y_SIZE, FIELD_X_SIZE
 from field.field import RED_TEST_POSE, BLUE_TEST_POSE
 from generated.tuner_constants import TunerConstants
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
-from lib_6107.commands import pathplanner
 from lib_6107.subsystems.pykit.swervedrive_io import SwerveDriveIO
 from subsystems import constants
 from subsystems.swervedrive.constants import DriveConstants
@@ -168,7 +167,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             ])
 
         # Some useful requests amd constants
-        max_speed = (1.0 * TunerConstants.speed_at_12_volts)  # speed_at_12_volts desired top speed
+        max_speed = (1.0 * MAX_SPEED)
         max_angular_rate = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
 
         # Setting up bindings for necessary control of the Phoenix6 swerve drive platform.
@@ -256,7 +255,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         """Keep track if we've ever applied the operator perspective before or not"""
 
         # Swerve request to apply during path following
-        self._apply_robot_speeds = swerve.requests.ApplyRobotSpeeds()
+        self.apply_robot_speeds = swerve.requests.ApplyRobotSpeeds()
 
         # Swerve requests to apply during SysId characterization
         self._translation_characterization = swerve.requests.SysIdSwerveTranslation()
@@ -341,12 +340,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._sys_id_routine_to_apply = self._sys_id_routine_translation
         """The SysId routine to test"""
 
-        # Init the Auto chooser.  PathPlanner init will fill in our choices
-        self.autoChooser: LoggedDashboardChooser[Command] = LoggedDashboardChooser("Auto Choices")
-
-        self._configure_auto_builder()
-
-
         if utils.is_simulation():
             self._start_sim_thread()
 
@@ -366,47 +359,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     @property
     def brake_request(self) -> swerve.requests.SwerveDriveBrake:
         return self._brake
-
-    def _configure_auto_builder(self):
-        config = RobotConfig.fromGUISettings()
-        AutoBuilder.configure(
-            lambda: self.get_state().pose,    # Supplier of current robot pose
-            self.reset_pose,                  # Consumer for seeding pose against auto
-            lambda: self.get_state().speeds,  # Supplier of current robot speeds
-
-            # Consumer of ChassisSpeeds and feedforwards to drive the robot
-            lambda speeds, feedforwards: self.set_control(
-                self._apply_robot_speeds
-                .with_speeds(ChassisSpeeds.discretize(speeds, 0.020))
-                .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
-                .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
-            ),
-            PPHolonomicDriveController(
-                # PID constants for translation
-                PIDConstants(10.0, 0.0, 0.0),
-                # PID constants for rotation
-                PIDConstants(7.0, 0.0, 0.0)
-            ),
-            config,
-            # Assume the path needs to be flipped for Red vs Blue, this is normally the case
-            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
-            self  # Subsystem for requirements
-        )
-        # Register all the library 'named' commands we may wish to use
-        self._auto_chooser = pathplanner.register_commands_and_triggers(self)
-
-        # TODO: AdvantangeScope support below
-        # # PathPlannerLogging.setLogActivePathCallback(lambda path: Logger.recordOutput("Odometry/Trajectory",
-        # #                                                                              path))
-        # # PathPlannerLogging.setLogTargetPoseCallback(lambda pose: Logger.recordOutput("Odometry/TrajectorySetpoint",
-        # #                                                                              pose))
-        # # TODO: More SysId below
-        # # self.sysid = SysIdRoutine(SysIdRoutine.Config(1, 7, 10,
-        # #                                               lambda state: Logger.recordOutput("Drive/SysIdState",
-        # #                                                                                 sysIdStateToStr(state)),),
-        # #                           SysIdRoutine.Mechanism((lambda volts: self.runOpenLoop(volts, volts)),
-        # #                                                  (lambda: None), self))
-
 
     def apply_request(
             self, request: Callable[[], swerve.requests.SwerveRequest]
@@ -771,7 +723,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     def rotate(self, rotation: radians_per_second) -> None:
         """
         Rotate the robot in place, without moving laterally (for example, for aiming)
-        :param rotSpeed: rotation speed
+        :param rotation: rotational speed
         """
         self.arcade_drive(0, rotation, field_relative=True)
 

@@ -22,174 +22,222 @@
 #
 
 import math
+from typing import Optional, Callable
 
-import commands2
+from commands2 import Command
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d, Translation2d, Pose2d
+from wpimath.units import degrees, meters
 
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 
+from pathplannerlib.auto import NamedCommands
+from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
-class SwerveToPoint(commands2.Command):
-    def __init__(self, x, y, headingDegrees, drivetrain: 'DriveSubsystem', speed=1.0, slowDownAtFinish=True,
-                 rate_limit=False) -> None:
+
+class SwerveToPoint(Command):
+    def __init__(self,
+                 drivetrain: DriveSubsystem,
+                 x:  Optional[int | float] = 0,
+                 y:  Optional[int | float] = 0,
+                 heading: Optional[Rotation2d | degrees] = 0.0,
+                 speed: Optional[float] = 1.0,
+                 slow_down_at_finish: Optional[bool] = True,
+                 rate_limit: Optional[bool] = False) -> None:
         super().__init__()
-        self.targetPose = None
-        self.targetPoint = Translation2d(x, y)
-        if isinstance(headingDegrees, Rotation2d):
-            self.targetHeading = headingDegrees
-        elif headingDegrees is not None:
-            self.targetHeading = Rotation2d.fromDegrees(headingDegrees)
-        else:
-            self.targetHeading = None
+        self._target_pose = None
+        self._target_point = Translation2d(x, y)
+        heading = heading or Rotation2d(0)
 
-        self.speed = speed
-        self.stop = slowDownAtFinish
-        self.rateLimit = rate_limit
-        self.drivetrain = drivetrain
+        if isinstance(heading, Rotation2d):
+            self._target_heading = heading
+
+        elif heading is not None:
+            self._target_heading = Rotation2d.fromDegrees(heading)
+        else:
+            self._target_heading = None
+
+        self._speed = speed
+        self._stop = slow_down_at_finish
+        self._rate_limit = rate_limit
+        self._drivetrain = drivetrain
         self.addRequirements(drivetrain)
 
-        self.initialPosition = None
-        self.initialDistance = None
-        self.overshot = False
+        self._initial_position = None
+        self._initial_distance = None
+        self._overshot = False
+
+    @staticmethod
+    def pathplanner_register(drivetrain: DriveSubsystem) -> None:
+        """
+        This command factory can be used with register this command
+        and make it available from within PathPlanner
+        """
+        def _cmd(**kwargs) -> Command:
+            return SwerveToPoint(drivetrain, **kwargs)
+
+        # Register the function itself
+        NamedCommands.registerCommand("SwerveToPoint", _cmd)
 
     def initialize(self):
-        initialPose = self.drivetrain.pose
-        self.initialPosition = initialPose.translation()
+        initial_pose = self._drivetrain.pose
+        self._initial_position = initial_pose.translation()
 
-        targetHeading = initialPose.rotation() if self.targetHeading is None else self.targetHeading
-        self.targetPose = Pose2d(self.targetPoint, targetHeading)
+        target_heading = initial_pose.rotation() if self._target_heading is None else self._target_heading
+        self._target_pose = Pose2d(self._target_point, target_heading)
 
-        self.initialDistance = self.initialPosition.distance(self.targetPose.translation())
-        self.overshot = False
+        self._initial_distance = self._initial_position.distance(self._target_pose.translation())
+        self._overshot = False
 
         SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
 
     def execute(self):
-        currentXY = self.drivetrain.pose
-        xDistance, yDistance = self.targetPose.x - currentXY.x, self.targetPose.y - currentXY.y
-        totalDistance = self.targetPose.translation().distance(currentXY.translation())
+        current_xy = self._drivetrain.pose
+        x_distance, y_distance = self._target_pose.x - current_xy.x, self._target_pose.y - current_xy.y
+        total_distance = self._target_pose.translation().distance(current_xy.translation())
 
-        totalSpeed = abs(self.speed)
-        if self.stop:  # proportional control: start slowing down if close to finish
-            totalSpeed = GoToPointConstants.kPTranslate * totalDistance
-            if GoToPointConstants.kUseSqrtControl:
-                totalSpeed = math.sqrt(0.5 * totalSpeed)
+        total_speed = abs(self._speed)
+        if self._stop:  # proportional control: start slowing down if close to finish
+            total_speed = GoToPointConstants.KP_TRANSLATE * total_distance
+            if GoToPointConstants.USE_SQRT_CONTROL:
+                total_speed = math.sqrt(0.5 * total_speed)
 
-        if totalSpeed > abs(self.speed):
-            totalSpeed = abs(self.speed)
-        if totalSpeed < GoToPointConstants.kMinTranslateSpeed:
-            totalSpeed = GoToPointConstants.kMinTranslateSpeed
+        if total_speed > abs(self._speed):
+            total_speed = abs(self._speed)
+
+        if total_speed < GoToPointConstants.MIN_TRANSLATE_SPEED:
+            total_speed = GoToPointConstants.MIN_TRANSLATE_SPEED
 
         # distribute the total speed between x speed and y speed
-        xSpeed, ySpeed = 0, 0
-        if totalDistance > 0:
-            xSpeed = totalSpeed * xDistance / totalDistance
-            ySpeed = totalSpeed * yDistance / totalDistance
+        x_speed, y_speed = 0, 0
 
-        degreesLeftToTurn = self.getDegreesLeftToTurn()
-        turningSpeed = abs(degreesLeftToTurn) * AimToDirectionConstants.kP
+        if total_distance > 0:
+            x_speed = total_speed * x_distance / total_distance
+            y_speed = total_speed * y_distance / total_distance
+
+        degrees_left_to_turn = self.get_degrees_left_to_turn()
+        turning_speed = abs(degrees_left_to_turn) * AimToDirectionConstants.kP
+
         if AimToDirectionConstants.USE_SQRT_CONTROL:
-            turningSpeed = math.sqrt(0.5 * turningSpeed)  # will match the non-sqrt value when 50% max speed
-        if turningSpeed > abs(self.speed):
-            turningSpeed = abs(self.speed)
-        if degreesLeftToTurn < 0:
-            turningSpeed = -turningSpeed
+            turning_speed = math.sqrt(0.5 * turning_speed)  # will match the non-sqrt value when 50% max speed
+
+        if turning_speed > abs(self._speed):
+            turning_speed = abs(self._speed)
+
+        if degrees_left_to_turn < 0:
+            turning_speed = -turning_speed
 
         # TODO: Make sure parameters are meters_per_second and radians_per_second
         # now rotate xSpeed and ySpeed into robot coordinates
-        speed = Translation2d(x=xSpeed, y=ySpeed).rotateBy(-self.drivetrain.heading)
+        speed = Translation2d(x=x_speed, y=y_speed).rotateBy(-self._drivetrain.heading)
 
-        self.drivetrain.drive(speed.x, speed.y, turningSpeed, field_relative=False, rate_limit=self.rate_limit)
+        self._drivetrain.drive(speed.x, speed.y, turning_speed, field_relative=False, rate_limit=self._rate_limit)
 
     def end(self, interrupted: bool):
-        self.drivetrain.stop()
+        self._drivetrain.stop()
         if interrupted:
             SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
 
     def isFinished(self) -> bool:
-        currentPose = self.drivetrain.pose
-        currentPosition = currentPose.translation()
+        current_pose = self._drivetrain.pose
+        current_position = current_pose.translation()
 
         # did we overshoot?
-        distanceFromInitialPosition = self.initialPosition.distance(currentPosition)
-        if not self.stop and distanceFromInitialPosition > self.initialDistance - GoToPointConstants.kApproachRadius:
+        distance_from_initial_position = self._initial_position.distance(current_position)
+
+        if not self._stop and distance_from_initial_position > self._initial_distance - GoToPointConstants.APPROACH_RADIUS:
             SmartDashboard.putString("command/c" + self.__class__.__name__, "acceptable")
             return True  # close enough
 
-        if distanceFromInitialPosition > self.initialDistance:
-            if not self.overshot:
+        if distance_from_initial_position > self._initial_distance:
+            if not self._overshot:
                 SmartDashboard.putString("command/c" + self.__class__.__name__, "overshooting")
-            self.overshot = True
 
-        if self.overshot:
-            distanceFromTargetDirectionDegrees = self.getDegreesLeftToTurn()
-            if abs(distanceFromTargetDirectionDegrees) < 3 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES:
+            self._overshot = True
+
+        if self._overshot:
+            distance_from_target_direction_degrees = self.get_degrees_left_to_turn()
+
+            if abs(distance_from_target_direction_degrees) < 3 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES:
                 SmartDashboard.putString("command/c" + self.__class__.__name__, "completed")
                 return True  # case 2: overshot in distance and target direction is correct
 
         return False
 
-    def getDegreesLeftToTurn(self):
+    def get_degrees_left_to_turn(self):
         # can we get rid of this function by using Rotation2d? probably we can
 
-        currentHeading = self.drivetrain.pose.rotation()
-        degreesLeftToTurn = (self.targetPose.rotation() - currentHeading).degrees()
+        current_heading = self._drivetrain.pose.rotation()
+        degrees_left_to_turn = (self._target_pose.rotation() - current_heading).degrees()
 
         # if we have +350 degrees left to turn, this really means we have -10 degrees left to turn
-        while degreesLeftToTurn > 180:
-            degreesLeftToTurn -= 360
+        while degrees_left_to_turn > 180:
+            degrees_left_to_turn -= 360
 
         # if we have -350 degrees left to turn, this really means we have +10 degrees left to turn
-        while degreesLeftToTurn < -180:
-            degreesLeftToTurn += 360
+        while degrees_left_to_turn < -180:
+            degrees_left_to_turn += 360
 
-        return degreesLeftToTurn
+        return degrees_left_to_turn
 
 
-class SwerveMove(commands2.Command):
+class SwerveMove(Command):
     def __init__(
             self,
-            metersToTheLeft: float,
-            metersBackwards: float,
             drivetrain: DriveSubsystem,
-            speed=1.0,
-            heading=None,
-            slowDownAtFinish=True,
-    ) -> None:
+            meters_to_the_left: Optional[meters] = 0.0,
+            meters_backwards: Optional[meters] = 0.0,
+            speed: Optional[float] = 1.0,
+            heading: Optional[Rotation2d, Callable[[], Rotation2d]] = None,
+            slow_down_at_finish: Optional[bool] = True) -> None:
+
         super().__init__()
-        self.drivetrain = drivetrain
+        self._drivetrain = drivetrain
         self.addRequirements(drivetrain)
-        self.speed = speed
-        self.metersToTheLeft = metersToTheLeft
-        self.metersBackwards = metersBackwards
-        self.slowdownAtFinish = slowDownAtFinish
 
-        self.desiredHeading = heading
+        self._speed = speed
+        self._meters_to_the_left = meters_to_the_left
+        self._meters_backward = meters_backwards
+        self._slow_down_at_finish = slow_down_at_finish
+
+        self._desired_heading = heading
         if heading is not None and not callable(heading):
-            self.desiredHeading = lambda: heading
+            self._desired_heading = lambda: heading
 
-        self.subcommand = None
+        self._subcommand = None
+
+    @staticmethod
+    def pathplanner_register(drivetrain: DriveSubsystem) -> None:
+        """
+        This command factory can be used with register this command
+        and make it available from within PathPlanner
+        """
+        def _cmd(**kwargs) -> Command:
+            return SwerveMove(drivetrain, **kwargs)
+
+        # Register the function itself
+        NamedCommands.registerCommand("SwerveMove", _cmd)
 
     def initialize(self):
-        position = self.drivetrain.pose
-        heading = self.desiredHeading() if self.desiredHeading is not None else position.rotation()
-        tgt = position.translation() + Translation2d(x=-self.metersBackwards, y=self.metersToTheLeft).rotateBy(heading)
-        self.subcommand = SwerveToPoint(
-            x=tgt.x, y=tgt.y, headingDegrees=heading.degrees(), drivetrain=self.drivetrain, speed=self.speed,
-            slowDownAtFinish=self.slowdownAtFinish
-        )
-        self.subcommand.initialize()
+        position = self._drivetrain.pose
+        heading = self._desired_heading() if self._desired_heading is not None else position.rotation()
+
+        target = position.translation() + Translation2d(x=-self._meters_backward,
+                                                        y=self._meters_to_the_left).rotateBy(heading)
+
+        self._subcommand = SwerveToPoint(x=target.x, y=target.y,
+                                         heading=heading.degrees(),
+                                         drivetrain=self._drivetrain,
+                                         speed=self._speed,
+                                         slow_down_at_finish=self._slow_down_at_finish)
+        self._subcommand.initialize()
 
     def isFinished(self) -> bool:
-        return self.subcommand.isFinished()
+        return self._subcommand.isFinished()
 
     def execute(self):
-        return self.subcommand.execute()
+        return self._subcommand.execute()
 
     def end(self, interrupted: bool):
-        self.subcommand.end(interrupted)
-
-
-SwerveToSide = SwerveMove
+        self._subcommand.end(interrupted)

@@ -5,41 +5,51 @@
 #
 
 import math
-from typing import Optional
+from typing import Optional, Callable
 
-import commands2
+from commands2 import Command
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 from wpilib import Timer, SmartDashboard, SendableChooser
 from wpimath.geometry import Rotation2d, Translation2d
+from wpimath.units import seconds, meters, percent
 
+from pathplannerlib.auto import NamedCommands
+from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 class Tunable:
     _choosers = {}
 
-    def __init__(self, settings, prefix, name, default, minMaxRange):
+    def __init__(self, settings, prefix, name, default, min_max_range):
         if settings is not None:
             if name in settings:
                 self.value = settings[name]
                 self.chooser = None
                 return
+
             if (prefix + name) in settings:
                 self.value = settings[prefix + name]
                 self.chooser = None
                 return
+
         self.value = None
         self.chooser = Tunable._choosers.get(prefix + name)
         if self.chooser is not None:
             return
+
         # if that chooser was not created yet, create it now
         Tunable._choosers[prefix + name] = self.chooser = SendableChooser()
+
         for index, factor in enumerate([0, 0.1, 0.17, 0.25, 0.35, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8, 4.0]):
             label, value = f"{factor * default}", factor * default
-            if minMaxRange[0] <= value <= minMaxRange[1]:
+
+            if min_max_range[0] <= value <= min_max_range[1]:
+
                 if factor == 1.0:
                     self.chooser.setDefaultOption(label, value)
                 else:
                     self.chooser.addOption(label, value)
+
         SmartDashboard.putData(prefix + name, self.chooser)
 
     def fetch(self):
@@ -51,31 +61,30 @@ class Tunable:
         return self.value
 
 
-class ApproachTag(commands2.Command):
+class ApproachTag(Command):
 
-    def __init__(self, drivetrain,
+    def __init__(self, drivetrain: DriveSubsystem,
                  camera,
-                 specificHeadingDegrees=None,
+                 specific_heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
                  speed=1.0,
                  reverse=False,
                  settings: dict | None = None,
-                 pushForwardSeconds=0.0,  # length of final approach
-                 pushForwardMinDistance=0.0,  # length of final approach in minimum distance
-                 finalApproachObjSize=10.0,
-                 detectionTimeoutSeconds=2.0,
-                 cameraMinimumFps=4.0,
-                 dashboardName=""
-        ):
+                 push_forward: Optional[seconds | Callable[[], seconds]] = 0.0,  # length of final approach
+                 push_forward_min_distance: Optional[meters] = 0.0,  # length of final approach in minimum distance
+                 final_approach_obj_size: Optional[percent] =10.0,
+                 detection_timeout: Optional[seconds] = 2.0,
+                 camera_minimum_fps: Optional[int | float] = 4.0,
+                 dashboard_name: Optional[str] = ""):
         """
         Align the swerve robot to AprilTag precisely and then optionally slowly push it forward for a split second
         :param camera: camera to use, LimelightCamera or PhotonVisionCamera (from https://github.com/epanov1602/CommandRevSwerve/blob/main/docs/Adding_Camera.md)
         :param drivetrain: a drivetrain that implements swerve drive functionality (or mecanum/ball, must veer to sides)
-        :param specificHeadingDegrees: do you want the robot to face in a very specific direction? then specify it
+        :param specific_heading: do you want the robot to face in a very specific direction? then specify it
         :param speed: positive speed, even if camera is on the back of your robot (for the latter case set reverse=True)
-        :param pushForwardSeconds: if you want the robot to do some kind of final approach at the end of alignment
+        :param push_forward: if you want the robot to do some kind of final approach at the end of alignment
         :param reverse: set it =True if the camera is on the back of the robot (not front)
-        :param detectionTimeoutSeconds: if no detection within this many seconds, assume the tag is lost
-        :param cameraMinimumFps: what is the minimal number of **detected** frames per second expected from this camera
+        :param detection_timeout: if no detection within this many seconds, assume the tag is lost
+        :param camera_minimum_fps: what is the minimal number of **detected** frames per second expected from this camera
         """
         super().__init__()
         assert hasattr(camera, "getX"), "camera must have `getX()` to give us the object coordinate (in degrees)"
@@ -83,62 +92,78 @@ class ApproachTag(commands2.Command):
         assert hasattr(camera, "getSecondsSinceLastHeartbeat"), "camera must have a `getSecondsSinceLastHeartbeat()`"
         assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
-        self.drivetrain = drivetrain
-        self.camera = camera
+        self._drivetrain = drivetrain
+        self._camera = camera
         self.addRequirements(drivetrain)
         self.addRequirements(camera)
 
-        self.reverse = reverse
-        self.approachSpeed = min((1.0, abs(speed)))  # ensure that the speed is between 0.0 and 1.0
-        self.finalApproachObjSize = finalApproachObjSize
+        self._reverse = reverse
+        self._approach_speed = min((1.0, abs(speed)))  # ensure that the speed is between 0.0 and 1.0
+        self._final_approach_object_size = final_approach_obj_size
 
-        self.finalApproachMinDistance = pushForwardMinDistance
-        self.pushForwardSeconds = pushForwardSeconds
-        if self.pushForwardSeconds is None:
-            self.pushForwardSeconds = Tunable(settings, dashboardName, "BrakeDst", 1.0, (0.0, 10.0))
-        elif not callable(self.pushForwardSeconds):
-            self.pushForwardSeconds = lambda: pushForwardSeconds
+        self._final_approach_min_distance = push_forward_min_distance
+        self._push_forward_seconds = push_forward
 
-        self.finalApproachSpeed = None
-        self.tagToFinalApproachPt = None  # will be assigned in initialize()
+        if self._push_forward_seconds is None:
+            self._push_forward_seconds = Tunable(settings, dashboard_name, "BrakeDst", 1.0, (0.0, 10.0))
 
-        assert detectionTimeoutSeconds > 0, f"non-positive detectionTimeoutSeconds={detectionTimeoutSeconds}"
-        self.detectionTimeoutSeconds = detectionTimeoutSeconds
+        elif not callable(self._push_forward_seconds):
+            self._push_forward_seconds = lambda: push_forward
 
-        assert cameraMinimumFps > 0, f"non-positive cameraMinimumFps={cameraMinimumFps}"
-        self.frameTimeoutSeconds = 1.0 / cameraMinimumFps
+        self._final_approach_speed = None
+        self._tag_to_final_approach_point = None  # will be assigned in initialize()
+
+        assert detection_timeout > 0, f"non-positive detectionTimeoutSeconds={detection_timeout}"
+        self._detection_timeout = detection_timeout
+
+        assert camera_minimum_fps > 0, f"non-positive cameraMinimumFps={camera_minimum_fps}"
+        self._frame_timeout: seconds = 1.0 / camera_minimum_fps
 
         # setting the target heading in a way that works for all cases
-        self.targetDegrees = specificHeadingDegrees
-        if specificHeadingDegrees is None:
-            self.targetDegrees = lambda: self.drivetrain.heading.degrees()
-        elif not callable(specificHeadingDegrees):
-            self.targetDegrees = lambda: specificHeadingDegrees
+        self._target_degrees = specific_heading
+
+        if specific_heading is None:
+            self._target_degrees = lambda: self._drivetrain.heading.degrees()
+
+        elif not callable(specific_heading):
+            self._target_degrees = lambda: specific_heading
 
         # state
-        self.targetDirection = None
-        self.lastSeenObjectTime = None
-        self.lastSeenObjectX = 0.0
-        self.lastSeenObjectSize = 0.0
-        self.lastSeenDistanceToTag = None
-        self.everSawObject = False
-        self.tReachedGlidePath = 0.0  # time when aligned to the tag and desired direction for the first time
-        self.tReachedFinalApproach = 0.0  # time when reached the final approach
-        self.xyReachedFinalApproach = Translation2d(0, 0)
-        self.lostTag = ""
-        self.finished = ""
+        self._target_direction = None
+        self._last_seen_object_time = None
+        self._last_seed_object_x = 0.0
+        self._last_seed_object_size = 0.0
+        self._last_seed_distance_to_tag = None
+        self._ever_saw_object = False
+        self._reached_glide_path_time = 0.0  # time when aligned to the tag and desired direction for the first time
+        self._reached_final_approach_time = 0.0  # time when reached the final approach
+        self._reached_final_approach_xy = Translation2d(0, 0)
+        self._lost_tag = ""
+        self._finished = ""
 
         # debugging
-        self.tStart = 0
-        self.lastState = self.getState()
-        self.lastWarnings = None
+        self._start_time = 0
+        self._last_state = self.get_state()
+        self._last_warnings = None
 
-        self.initTunables(settings, dashboardName)
+        self.init_tunables(settings, dashboard_name)
 
-    def isReady(self, minRequiredObjectSize=0.3):
-        return self.camera.hasDetection() and self.camera.getA() > minRequiredObjectSize
+    @staticmethod
+    def pathplanner_register(drivetrain: 'DriveSubsystem') -> None:
+        """
+        This command factory can be used with register this command
+        and make it available from within PathPlanner
+        """
+        def _cmd(**kwargs) -> Command:
+            return ApproachTag(drivetrain, **kwargs)
 
-    def initTunables(self, settings, prefix):
+        # Register the function itself
+        NamedCommands.registerCommand("ArcadeDrive", _cmd)
+
+    def isReady(self, min_required_object_size=0.3):
+        return self._camera.hasDetection() and self._camera.getA() > min_required_object_size
+
+    def init_tunables(self, settings, prefix):
         self.KPMULT_TRANSLATION = Tunable(settings, prefix, "GainTran", 0.5, (0.1, 8.0))  # gain for how quickly to move
         self.KPMULT_ROTATION = Tunable(settings, prefix, "GainRot", 0.8, (0.1, 8.0))  # gail for how quickly to rotate
 
@@ -161,217 +186,238 @@ class ApproachTag(commands2.Command):
             self.APPROACH_SHAPE,
             self.OUT_OF_SIGHT_ALLOWED,
         ]
-        if isinstance(self.pushForwardSeconds, Tunable):
-            self.tunables.append(self.pushForwardSeconds)
+        if isinstance(self._push_forward_seconds, Tunable):
+            self.tunables.append(self._push_forward_seconds)
 
     def initialize(self):
         for t in self.tunables:
             t.fetch()
 
-        kpMultTran = self.KPMULT_TRANSLATION.value
-        print(f"ApproachTag: translation gain value {kpMultTran}, power={self.APPROACH_SHAPE.value}")
+        kp_mult_tran = self.KPMULT_TRANSLATION.value
+        print(f"ApproachTag: translation gain value {kp_mult_tran}, power={self.APPROACH_SHAPE.value}")
 
-        targetDegrees = self.targetDegrees()
-        if targetDegrees is None:
-            targetDegrees = self.drivetrain.heading.degrees()
+        target_degrees = self._target_degrees()
+        if target_degrees is None:
+            target_degrees = self._drivetrain.heading.degrees()
 
-        self.targetDirection = Rotation2d.fromDegrees(targetDegrees)
-        self.tReachedGlidePath = 0.0  # time when reached the glide path
-        self.tReachedFinalApproach = 0.0  # time when reached the final approach
-        self.xyReachedFinalApproach = Translation2d(0, 0)
-        self.lostTag = False
-        self.lastSeenObjectX = 0.0
-        self.lastSeenObjectSize = 0.0
-        self.lastSeenDistanceToTag = 999
-        self.lastSeenObjectTime = Timer.getFPGATimestamp()
-        self.everSawObject = False
-        self.finished = ""
+        self._target_direction = Rotation2d.fromDegrees(target_degrees)
+        self._reached_glide_path_time = 0.0  # time when reached the glide path
+        self._reached_final_approach_time = 0.0  # time when reached the final approach
+        self._reached_final_approach_xy = Translation2d(0, 0)
+        self._lost_tag = False
+        self._last_seed_object_x = 0.0
+        self._last_seed_object_size = 0.0
+        self._last_seed_distance_to_tag = 999
+        self._last_seen_object_time = Timer.getFPGATimestamp()
+        self._ever_saw_object = False
+        self._finished = ""
 
         # final approach parameters
-        self.tagToFinalApproachPt = self.computeTagDistanceFromTagSizeOnFrame(self.finalApproachObjSize)
-        self.finalApproachSpeed = 0
-        self.finalApproachSeconds = max([0, self.pushForwardSeconds()])
-        if self.finalApproachSeconds > 0:
-            self.finalApproachSpeed = self.computeProportionalSpeed(self.tagToFinalApproachPt)
+        self._tag_to_final_approach_point = self.compute_tag_distance_from_tag_size_on_frame(self._final_approach_object_size)
+        self._final_approach_speed = 0
+
+        self._final_approach_seconds = max([0, self._push_forward_seconds()])
+        if self._final_approach_seconds > 0:
+            self._final_approach_speed = self.compute_proportional_speed(self._tag_to_final_approach_point)
 
         # debugging info
-        self.tStart = Timer.getFPGATimestamp()
-        self.lastState = -1
-        self.lastWarnings = None
+        self._start_time = Timer.getFPGATimestamp()
+        self._last_state = -1
+        self._last_warnings = None
+
         SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
 
     def isFinished(self) -> bool:
-        if self.finished:
+        if self._finished:
             return True
 
         now = Timer.getFPGATimestamp()
 
         # bad ways to finish
-        if self.lostTag:
-            self.finished = self.lostTag
-        elif now > self.lastSeenObjectTime + self.detectionTimeoutSeconds + self.finalApproachSeconds:
-            delay = now - self.lastSeenObjectTime
-            self.finished = f"not seen {int(1000 * delay)}ms"
+        if self._lost_tag:
+            self._finished = self._lost_tag
+
+        elif now > self._last_seen_object_time + self._detection_timeout + self._final_approach_seconds:
+            delay = now - self._last_seen_object_time
+            self._finished = f"not seen {int(1000 * delay)}ms"
 
         # good ways to finish
-        elif self.tReachedFinalApproach != 0:
-            length = (self.drivetrain.pose.translation() - self.xyReachedFinalApproach).norm()
-            if now > self.tReachedFinalApproach + self.finalApproachSeconds:
-                self.finished = f"approached within {now - self.tReachedFinalApproach}s, drove {length}m"
+        elif self._reached_final_approach_time != 0:
+            length = (self._drivetrain.pose.translation() - self._reached_final_approach_xy).norm()
 
-        if not self.finished:
+            if now > self._reached_final_approach_time + self._final_approach_seconds:
+                self._finished = f"approached within {now - self._reached_final_approach_time}s, drove {length}m"
+
+        if not self._finished:
             return False
 
         return True
 
     def end(self, interrupted: bool):
-        self.drivetrain.stop()
+        self._drivetrain.stop()
         if interrupted:
             SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
         else:
-            elapsed = Timer.getFPGATimestamp() - self.tStart
-            SmartDashboard.putString("command/c" + self.__class__.__name__, f"{int(1000 * elapsed)}ms: {self.finished}")
+            elapsed = Timer.getFPGATimestamp() - self._start_time
+            SmartDashboard.putString("command/c" + self.__class__.__name__, f"{int(1000 * elapsed)}ms: {self._finished}")
 
     def execute(self):
         now = Timer.getFPGATimestamp()
 
         # 0. look at the camera
-        self.updateVision(now)
-        visionOld = (now - self.lastSeenObjectTime) / (0.5 * self.frameTimeoutSeconds)
-        if self.lostTag:
-            self.drivetrain.stop()
+        self.update_vision(now)
+        vision_old = (now - self._last_seen_object_time) / (0.5 * self._frame_timeout)
+
+        if self._lost_tag:
+            self._drivetrain.stop()
             return
 
         # 1. how many degrees are left to turn? (and recommended rotation speed)
-        rotationSpeed, degreesLeftToRotate = self.getGyroBasedRotationSpeed()
+        rotation_speed, degrees_left_to_rotate = self.get_gyro_based_rotation_speed()
 
         # 2. how far from the glide path? (and recommended translation speed)
-        fwdSpeed, leftSpeed, distanceToGlidePath = self.getVisionBasedSwerveSpeed(now)
+        fwd_speed, left_speed, distance_to_glide_path = self.get_vision_based_swerve_speed(now)
 
         # 3. have we reached the glide path?
-        if self.hasReachedGlidePath(degreesLeftToRotate, distanceToGlidePath):
-            if self.tReachedGlidePath == 0:
-                self.tReachedGlidePath = now
+        if self.has_reached_glide_path(degrees_left_to_rotate, distance_to_glide_path):
+            if self._reached_glide_path_time == 0:
+                self._reached_glide_path_time = now
 
         # 4. be careful with forward speed
         warnings = None
-        if self.tReachedFinalApproach != 0:
+
+        if self._reached_final_approach_time != 0:
             # - if we are on final approach, completely ignore the fwdSpeed from the visual estimation
-            fwdSpeed = 0
-            if self.finalApproachSeconds > 0:
-                completedPercentage = (now - self.tReachedFinalApproach) / self.finalApproachSeconds
-                if self.finalApproachMinDistance > 0:
-                    completedDistance = (self.drivetrain.pose.translation() - self.xyReachedFinalApproach).norm()
-                    if completedDistance < self.finalApproachMinDistance:
-                        completedPercentage = 0.0  # if min distance is not met, don't even slow down
-                fwdSpeed = self.finalApproachSpeed * max((0.0, 1.0 - completedPercentage))
-                if abs(fwdSpeed) < GoToPointConstants.kMinTranslateSpeed:
-                    fwdSpeed = math.copysign(GoToPointConstants.kMinTranslateSpeed, self.finalApproachSpeed)
-            leftSpeed *= max(0.0, 1 - visionOld * visionOld)  # final approach: dial down the left speed if no object
+            fwd_speed = 0
+            if self._final_approach_seconds > 0:
+                completed_percentage = (now - self._reached_final_approach_time) / self._final_approach_seconds
+
+                if self._final_approach_min_distance > 0:
+                    completed_distance = (self._drivetrain.pose.translation() - self._reached_final_approach_xy).norm()
+
+                    if completed_distance < self._final_approach_min_distance:
+                        completed_percentage = 0.0  # if min distance is not met, don't even slow down
+
+                fwd_speed = self._final_approach_speed * max((0.0, 1.0 - completed_percentage))
+
+                if abs(fwd_speed) < GoToPointConstants.MIN_TRANSLATE_SPEED:
+                    fwd_speed = math.copysign(GoToPointConstants.MIN_TRANSLATE_SPEED, self._final_approach_speed)
+
+            left_speed *= max(0.0, 1 - vision_old * vision_old)  # final approach: dial down the left speed if no object
         else:
             # - slow down if the visual estimate is old, if heading is not right yet, or if rotating away
-            closeToEdge = 0
-            if self.everSawObject and self.OUT_OF_SIGHT_ALLOWED.value == 0 and self.lastSeenObjectX * rotationSpeed > 0:
-                closeToEdge = abs(self.lastSeenObjectX) / 5.0  # rotating away from the object in frame? slow this down!
-            farFromDesiredHeading = abs(degreesLeftToRotate) / self.DESIRED_HEADING_RADIUS.value
+            close_to_edge = 0
 
-            if farFromDesiredHeading >= 1:
+            if self._ever_saw_object and self.OUT_OF_SIGHT_ALLOWED.value == 0 and self._last_seed_object_x * rotation_speed > 0:
+                close_to_edge = abs(self._last_seed_object_x) / 5.0  # rotating away from the object in frame? slow this down!
+
+            far_from_desired_heading = abs(degrees_left_to_rotate) / self.DESIRED_HEADING_RADIUS.value
+
+            if far_from_desired_heading >= 1:
                 warnings = "large heading error"
-            if closeToEdge >= 1:
-                warnings = "close to frame edge"
-            if visionOld >= 1:
-                warnings = f"temporarily out of sight"
-            # any other reason to slow down? put it above
 
-            fwdSpeed *= max(0.0, 1 - max(farFromDesiredHeading, closeToEdge, visionOld))
+            if close_to_edge >= 1:
+                warnings = "close to frame edge"
+
+            if vision_old >= 1:
+                warnings = f"temporarily out of sight"
+
+            # any other reason to slow down? put it above
+            fwd_speed *= max(0.0, 1 - max(far_from_desired_heading, close_to_edge, vision_old))
 
             if self.OUT_OF_SIGHT_ALLOWED.value == 0:
-                leftSpeed *= max(0.0, 1 - visionOld)
-                rotationSpeed *= max(0.0, 1 - max(visionOld, closeToEdge))
+                left_speed *= max(0.0, 1 - vision_old)
+                rotation_speed *= max(0.0, 1 - max(vision_old, close_to_edge))
 
         # 5. drive!
-        if self.reverse:     # TODO: Make sure parameters are meters_per_second and radians_per_second
-            self.drivetrain.drive(-fwdSpeed, -leftSpeed, rotationSpeed, field_relative=False, rate_limit=False)
+        if self._reverse:     # TODO: Make sure parameters are meters_per_second and radians_per_second
+            self._drivetrain.drive(-fwd_speed, -left_speed, rotation_speed, field_relative=False, rate_limit=False)
         else:
-            self.drivetrain.drive(fwdSpeed, leftSpeed, rotationSpeed, field_relative=False, rate_limit=False)
+            self._drivetrain.drive(fwd_speed, left_speed, rotation_speed, field_relative=False, rate_limit=False)
 
         # 6. debug
-        state = self.getState()
-        if state != self.lastState or warnings != self.lastWarnings:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, warnings or self.STATE_NAMES[state])
-        self.lastState = state
-        self.lastWarnings = warnings
+        state = self.get_state()
 
-    def getGyroBasedRotationSpeed(self):
+        if state != self._last_state or warnings != self._last_warnings:
+            SmartDashboard.putString("command/c" + self.__class__.__name__, warnings or self.STATE_NAMES[state])
+
+        self._last_state = state
+        self._last_warnings = warnings
+
+    def get_gyro_based_rotation_speed(self):
         # 1. how many degrees are left to turn?
-        currentDirection = self.drivetrain.heading
-        rotationRemaining = self.targetDirection - currentDirection
-        degreesRemaining = rotationRemaining.degrees()
+        current_direction = self._drivetrain.heading
+        rotation_remaining = self._target_direction - current_direction
+        degrees_remaining = rotation_remaining.degrees()
+
         # (optimize: do not turn left 350 degrees if you can just turn right -10 degrees, and vice versa)
-        while degreesRemaining > 180:
-            degreesRemaining -= 360
-        while degreesRemaining < -180:
-            degreesRemaining += 360
+        while degrees_remaining > 180:
+            degrees_remaining -= 360
+
+        while degrees_remaining < -180:
+            degrees_remaining += 360
 
         # 2. proportional control: if we are almost finished turning, use slower turn speed (to avoid overshooting)
-        proportionalSpeed = self.KPMULT_ROTATION.value * AimToDirectionConstants.kP * abs(degreesRemaining)
-        proportionalSpeed = math.sqrt(0.5 * proportionalSpeed)  # will match the non-sqrt value when 50% max speed
+        proportional_speed = self.KPMULT_ROTATION.value * AimToDirectionConstants.kP * abs(degrees_remaining)
+        proportional_speed = math.sqrt(0.5 * proportional_speed)  # will match the non-sqrt value when 50% max speed
 
         # 3. if target angle is on the right, we should really turn right (negative turn speed)
-        turnSpeed = min([proportionalSpeed, 1.0])
-        if degreesRemaining < 0:
-            turnSpeed = -turnSpeed
+        turn_speed = min([proportional_speed, 1.0])
+        if degrees_remaining < 0:
+            turn_speed = -turn_speed
 
-        return turnSpeed, degreesRemaining
+        return turn_speed, degrees_remaining
 
-    def getVisionBasedSwerveSpeed(self, now):
-        direction = self.getVisionBasedSwerveDirection(now)
+    def get_vision_based_swerve_speed(self, now):
+        direction = self.get_vision_based_swerve_direction(now)
         if direction is None:
             return 0.0, 0.0, None
 
         # use proportional control to compute the velocity
         distance = direction.norm()
-        velocity = self.computeProportionalSpeed(distance)
+        velocity = self.compute_proportional_speed(distance)
 
         # adjust the direction to account for APPROACH_SHAPE_POWER (= how strongly we prioritize getting to glide path)
         direction = Translation2d(direction.x, direction.y * self.APPROACH_SHAPE.value)
         norm = direction.norm()
 
         # distribute velocity between X and Y velocities in a way that gives us correct trajectory shape
-        yVelocity = velocity * (direction.y / norm)
-        xVelocity = velocity * (direction.x / norm)
+        y_velocity = velocity * (direction.y / norm)
+        x_velocity = velocity * (direction.x / norm)
 
         # do we need to rescale these velocities to meet constraints?
-        norm = Translation2d(xVelocity, yVelocity).norm()
-        if norm < GoToPointConstants.kMinTranslateSpeed:
-            factor = GoToPointConstants.kMinTranslateSpeed / norm
-            xVelocity *= factor
-            yVelocity *= factor
+        norm = Translation2d(x_velocity, y_velocity).norm()
+
+        if norm < GoToPointConstants.MIN_TRANSLATE_SPEED:
+            factor = GoToPointConstants.MIN_TRANSLATE_SPEED / norm
+            x_velocity *= factor
+            y_velocity *= factor
 
         # done
-        return xVelocity, yVelocity, abs(direction.y)
+        return x_velocity, y_velocity, abs(direction.y)
 
-    def getVisionBasedSwerveDirection(self, now):
+    def get_vision_based_swerve_direction(self, now):
         # can we trust the last seen object?
-        if not (self.lastSeenObjectSize > 0):
+        if not (self._last_seed_object_size > 0):
             return None  # the object is not yet there, hoping that this is temporary
 
         # where are we?
-        robotX, robotY, tagX = self.localize()
+        robot_x, robot_y, tag_x = self.localize()
 
         # have we reached the final approach point now? (must already be on glide path, otherwise it doesn't count)
-        if self.tReachedGlidePath != 0 and self.tReachedFinalApproach == 0 and robotX > 0:
+        if self._reached_glide_path_time != 0 and self._reached_final_approach_time == 0 and robot_x > 0:
             SmartDashboard.putString("command/c" + self.__class__.__name__, "reached final approach")
-            self.tReachedFinalApproach = now
-            self.xyReachedFinalApproach = self.drivetrain.pose.translation()
-            print(f"final approach starting from {self.xyReachedFinalApproach}")
+            self._reached_final_approach_time = now
+            self._reached_final_approach_xy = self._drivetrain.pose.translation()
+            print(f"final approach starting from {self._reached_final_approach_xy}")
 
         # if we already reached the glide path, and we want nonzero final approach (after reaching desired size)
         # ... then go directly towards the tag (x, y = tagX, 0) instead of going towards 0, 0
-        if self.tReachedGlidePath != 0 and self.finalApproachSeconds > 0:
-            direction = Translation2d(x=tagX - robotX, y=0.0 - robotY)
+        if self._reached_glide_path_time != 0 and self._final_approach_seconds > 0:
+            direction = Translation2d(x=tag_x - robot_x, y=0.0 - robot_y)
         else:
-            direction = Translation2d(x=0.0 - robotX, y=0.0 - robotY)  # otherwise go towards 0, 0
+            direction = Translation2d(x=0.0 - robot_x, y=0.0 - robot_y)  # otherwise go towards 0, 0
+
         if not (direction.x != 0 or direction.y != 0):
             SmartDashboard.putString("command/c" + self.__class__.__name__, "warning: distance not positive")
             return None
@@ -384,26 +430,30 @@ class ApproachTag(commands2.Command):
         (i.e. final approach point is assumed to be at (x, y) = (0, 0), tag is assumed to be at (x, y) = (d, 0))
         :return: (x, y, d), where `x,y` are coordinates of the robot and `d` is distance between that point and tag
         """
-        distanceToTag = self.lastSeenDistanceToTag
+        distance_to_tag = self._last_seed_distance_to_tag
 
         # trigonometry: how many meters on the left is our tag? (if negative, then it's on the right)
-        angle = Rotation2d.fromDegrees(self.lastSeenObjectX)
-        y = -distanceToTag * angle.sin()
+        angle = Rotation2d.fromDegrees(self._last_seed_object_x)
+        y = -distance_to_tag * angle.sin()
 
-        distanceToFinalApproach = distanceToTag - self.tagToFinalApproachPt
-        return -distanceToFinalApproach, -y, self.tagToFinalApproachPt
+        distance_to_final_approach = distance_to_tag - self._tag_to_final_approach_point
+        return -distance_to_final_approach, -y, self._tag_to_final_approach_point
 
-    def computeProportionalSpeed(self, distance) -> float:
-        kpMultTran = self.KPMULT_TRANSLATION.value
-        velocity = distance * GoToPointConstants.kPTranslate * kpMultTran
-        velocity = math.sqrt(0.5 * velocity * kpMultTran)
-        if velocity > self.approachSpeed:
-            velocity = self.approachSpeed
-        if velocity < GoToPointConstants.kMinTranslateSpeed:
-            velocity = GoToPointConstants.kMinTranslateSpeed
+    def compute_proportional_speed(self, distance) -> float:
+        kp_mult_tran = self.KPMULT_TRANSLATION.value
+        velocity = distance * GoToPointConstants.KP_TRANSLATE * kp_mult_tran
+        velocity = math.sqrt(0.5 * velocity * kp_mult_tran)
+
+        if velocity > self._approach_speed:
+            velocity = self._approach_speed
+
+        if velocity < GoToPointConstants.MIN_TRANSLATE_SPEED:
+            velocity = GoToPointConstants.MIN_TRANSLATE_SPEED
+
         return velocity
 
-    def computeTagDistanceFromTagSizeOnFrame(self, objectSizePercent):
+    @staticmethod
+    def compute_tag_distance_from_tag_size_on_frame(object_size: percent):
         """
         # if a 0.2*0.2 meter AprilTag appears to take 1% of the screen on a 1.33-square-radian FOV camera...
         #   angular_area = area / distance^2
@@ -413,43 +463,48 @@ class ApproachTag(commands2.Command):
         #
         # in other words, we can use this approximate formula for distance (if we have 0.2 * 0.2 meter AprilTag)
         """
-        return math.sqrt(0.2 * 0.2 / (1.70 * 0.01 * objectSizePercent))
+        return math.sqrt(0.2 * 0.2 / (1.70 * 0.01 * object_size))
         # note: Arducam w OV9281 (and Limelight 3 / 4) is 0.57 sq radians (not 1.33)
 
-    def hasReachedGlidePath(self, degreesLeftToRotate: float, distanceToGlidePath: float) -> bool:
-        reachedNow = (
-                distanceToGlidePath is not None and
-                abs(distanceToGlidePath) < self.GLIDE_PATH_WIDTH_INCHES.value * 0.0254 * 0.5 and
-                abs(degreesLeftToRotate) < 4 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES
+    def has_reached_glide_path(self, degrees_left_to_rotate: float, distance_to_glide_path: float) -> bool:
+        reached_now = (
+                distance_to_glide_path is not None and
+                abs(distance_to_glide_path) < self.GLIDE_PATH_WIDTH_INCHES.value * 0.0254 * 0.5 and
+                abs(degrees_left_to_rotate) < 4 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES
         )
-        if self.tReachedGlidePath and not reachedNow:
-            print(f"WARNING: not on glide path anymore (distance={distanceToGlidePath}, degrees={degreesLeftToRotate}")
-        return reachedNow
+        if self._reached_glide_path_time and not reached_now:
+            print(f"WARNING: not on glide path anymore (distance={distance_to_glide_path}, degrees={degrees_left_to_rotate}")
 
-    def updateVision(self, now):
+        return reached_now
+
+    def update_vision(self, now):
         # non-sim logic:
-        if self.camera.hasDetection():
-            x = self.camera.getX()
-            a = self.camera.getA()
+        if self._camera.hasDetection():
+            x = self._camera.getX()
+            a = self._camera.getA()
+
             if x != 0 and a > 0:
-                self.lastSeenDistanceToTag = self.computeTagDistanceFromTagSizeOnFrame(a)
-                self.lastSeenObjectTime = now
-                self.lastSeenObjectSize = a
-                self.lastSeenObjectX = x
-                if not self.everSawObject:
-                    self.everSawObject = True
+                self._last_seed_distance_to_tag = self.compute_tag_distance_from_tag_size_on_frame(a)
+                self._last_seen_object_time = now
+                self._last_seed_object_size = a
+                self._last_seed_object_x = x
 
-        timeSinceLastHeartbeat = self.camera.getSecondsSinceLastHeartbeat()
-        if timeSinceLastHeartbeat > self.frameTimeoutSeconds:
-            self.lostTag = f"no camera heartbeat > {int(1000 * timeSinceLastHeartbeat)}ms"
+                if not self._ever_saw_object:
+                    self._ever_saw_object = True
 
-        if self.lastSeenObjectTime != 0:
-            timeSinceLastDetection = now - self.lastSeenObjectTime
-            if timeSinceLastDetection > self.detectionTimeoutSeconds:
-                if self.tReachedFinalApproach == 0:
-                    self.lostTag = f"object lost for {int(1000 * timeSinceLastDetection)}ms before final approach"
-                elif timeSinceLastDetection > self.detectionTimeoutSeconds + self.finalApproachSeconds:
-                    self.lostTag = f"object lost for {int(1000 * timeSinceLastDetection)}ms on final approach"
+        time_since_last_heartbeat = self._camera.getSecondsSinceLastHeartbeat()
+        if time_since_last_heartbeat > self._frame_timeout:
+            self._lost_tag = f"no camera heartbeat > {int(1000 * time_since_last_heartbeat)}ms"
+
+        if self._last_seen_object_time != 0:
+            time_since_last_detection = now - self._last_seen_object_time
+
+            if time_since_last_detection > self._detection_timeout:
+                if self._reached_final_approach_time == 0:
+                    self._lost_tag = f"object lost for {int(1000 * time_since_last_detection)}ms before final approach"
+
+                elif time_since_last_detection > self._detection_timeout + self._final_approach_seconds:
+                    self._lost_tag = f"object lost for {int(1000 * time_since_last_detection)}ms on final approach"
 
     STATE_NAMES = [
         "starting",
@@ -460,42 +515,42 @@ class ApproachTag(commands2.Command):
         "lost tag",
     ]
 
-    def getState(self):
-        if self.lostTag:
+    def get_state(self):
+        if self._lost_tag:
             return 5
-        if self.finished:
+        if self._finished:
             return 4
-        if self.tReachedFinalApproach != 0:
+        if self._reached_final_approach_time != 0:
             return 3
-        if self.tReachedGlidePath != 0:
+        if self._reached_glide_path_time != 0:
             return 2
-        if self.lastSeenObjectX != 1:
+        if self._last_seed_object_x != 1:
             return 1
         # otherwise, just starting
         return 0
 
 
-class ApproachManually(commands2.Command):
+class ApproachManually(Command):
 
     def __init__(
             self,
             camera,
             drivetrain,
-            speed: typing.Callable[[], float],
-            specificHeadingDegrees=None,
+            speed: Callable[[], float],
+            specific_heading_degrees=None,
             reverse=False,
             settings: dict | None = None,
-            cameraMinimumFps=4.0,
-            dashboardName="apmn"
+            camera_minimum_fps=4.0,
+            dashboard_name="apmn"
     ):
         """
         Align the swerve robot to AprilTag precisely and then optionally slowly push it forward for a split second
         :param camera: camera to use, LimelightCamera or PhotonVisionCamera (from https://github.com/epanov1602/CommandRevSwerve/blob/main/docs/Adding_Camera.md)
         :param drivetrain: a drivetrain that implements swerve drive functionality (or mecanum/ball, must veer to sides)
-        :param specificHeadingDegrees: do you want the robot to face in a very specific direction? then specify it
+        :param specific_heading_degrees: do you want the robot to face in a very specific direction? then specify it
         :param speed: function to get positive speed, even if camera is on the back of your robot (for the latter case set reverse=True)
         :param reverse: set it =True if the camera is on the back of the robot (not front)
-        :param cameraMinimumFps: what is the minimal number of **detected** frames per second expected from this camera
+        :param camera_minimum_fps: what is the minimal number of **detected** frames per second expected from this camera
         """
         super().__init__()
         assert hasattr(camera, "getX"), "camera must have `getX()` to give us the object coordinate (in degrees)"
@@ -503,7 +558,7 @@ class ApproachManually(commands2.Command):
         assert hasattr(camera, "getSecondsSinceLastHeartbeat"), "camera must have a `getSecondsSinceLastHeartbeat()`"
         assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
-        self.drivetrain = drivetrain
+        self._drivetrain = drivetrain
         self.camera = camera
         self.addRequirements(drivetrain)
         self.addRequirements(camera)
@@ -513,15 +568,15 @@ class ApproachManually(commands2.Command):
         if not callable(speed):
             self.speed = lambda: speed
 
-        assert cameraMinimumFps > 0, f"non-positive cameraMinimumFps={cameraMinimumFps}"
-        self.frameTimeoutSeconds = 1.0 / cameraMinimumFps
+        assert camera_minimum_fps > 0, f"non-positive cameraMinimumFps={camera_minimum_fps}"
+        self.frameTimeoutSeconds = 1.0 / camera_minimum_fps
 
         # setting the target heading in a way that works for all cases
-        self.targetDegrees = specificHeadingDegrees
-        if specificHeadingDegrees is None:
-            self.targetDegrees = lambda: self.drivetrain.heading.degrees()
-        elif not callable(specificHeadingDegrees):
-            self.targetDegrees = lambda: specificHeadingDegrees
+        self.targetDegrees = specific_heading_degrees
+        if specific_heading_degrees is None:
+            self.targetDegrees = lambda: self._drivetrain.heading.degrees()
+        elif not callable(specific_heading_degrees):
+            self.targetDegrees = lambda: specific_heading_degrees
 
         # state
         self.targetDirection = None
@@ -536,7 +591,7 @@ class ApproachManually(commands2.Command):
         self.lostTag = ""
         self.finished = ""
 
-        self.initTunables(settings, dashboardName)
+        self.initTunables(settings, dashboard_name)
 
     def isReady(self, minRequiredObjectSize=0.3):
         return self.camera.hasDetection() and self.camera.getA() > minRequiredObjectSize
@@ -576,19 +631,19 @@ class ApproachManually(commands2.Command):
         return False  # never
 
     def end(self, interrupted: bool):
-        self.drivetrain.stop()
+        self._drivetrain.stop()
 
     def execute(self):
         now = Timer.getFPGATimestamp()
 
         # 0. look at the camera
-        self.updateVision(now)
+        self.update_vision(now)
 
         # 1. how many degrees are left to turn? (and recommended rotation speed)
-        rotationSpeed, degreesLeftToRotate = self.getGyroBasedRotationSpeed()
+        rotation_speed, degreesLeftToRotate = self.get_gyro_based_rotation_speed()
 
         # 2. how far from the glide path? (and recommended left translation speed)
-        leftSpeed = self.getVisionBasedSwerveLeftSpeed(now)
+        leftSpeed = self.get_vision_based_swerve_left_speed(now)
 
         # 3. the forward speed
         fwdSpeed = self.speed()
@@ -597,79 +652,86 @@ class ApproachManually(commands2.Command):
         # 4. if we have not seen that object in a while (or about to lose it from sight), go slower
         if self.everSawObject:
             visionOld = (now - self.lastSeenObjectTime) / (0.5 * self.frameTimeoutSeconds)
-            closeToEdge = abs(self.lastSeenObjectX) / 5.0 if self.lastSeenObjectX * rotationSpeed > 0 else 0.0
+            closeToEdge = abs(self.lastSeenObjectX) / 5.0 if self.lastSeenObjectX * rotation_speed > 0 else 0.0
             leftSpeed *= max(0.0, 1.0 - visionOld)
-            rotationSpeed *= max(0.25, 1.0 - closeToEdge)
+            rotation_speed *= max(0.25, 1.0 - closeToEdge)
 
         # 5. drive!
         if self.reverse:     # TODO: Make sure parameters are meters_per_second and radians_per_second
-            self.drivetrain.drive(-fwdSpeed, -leftSpeed, rotationSpeed, field_relative=False, rate_limit=True)
+            self._drivetrain.drive(-fwdSpeed, -leftSpeed, rotation_speed, field_relative=False, rate_limit=True)
         else:
-            self.drivetrain.drive(fwdSpeed, leftSpeed, rotationSpeed, field_relative=False, rate_limit=True)
+            self._drivetrain.drive(fwdSpeed, leftSpeed, rotation_speed, field_relative=False, rate_limit=True)
 
-    def getGyroBasedRotationSpeed(self):
+    def get_gyro_based_rotation_speed(self):
         # 1. how many degrees are left to turn?
-        currentDirection = self.drivetrain.heading
-        rotationRemaining = self.targetDirection - currentDirection
-        degreesRemaining = rotationRemaining.degrees()
+        current_direction = self._drivetrain.heading
+        rotation_remaining = self.targetDirection - current_direction
+        degrees_remaining = rotation_remaining.degrees()
+
         # (optimize: do not turn left 350 degrees if you can just turn right -10 degrees, and vice versa)
-        while degreesRemaining > 180:
-            degreesRemaining -= 360
-        while degreesRemaining < -180:
-            degreesRemaining += 360
+        while degrees_remaining > 180:
+            degrees_remaining -= 360
+        while degrees_remaining < -180:
+            degrees_remaining += 360
 
         # 2. proportional control: if we are almost finished turning, use slower turn speed (to avoid overshooting)
-        proportionalSpeed = self.KPMULT_ROTATION.value * AimToDirectionConstants.kP * abs(degreesRemaining)
+        proportional_speed = self.KPMULT_ROTATION.value * AimToDirectionConstants.kP * abs(degrees_remaining)
         if AimToDirectionConstants.USE_SQRT_CONTROL:
-            proportionalSpeed = math.sqrt(0.5 * proportionalSpeed)  # will match the non-sqrt value when 50% max speed
+            proportional_speed = math.sqrt(0.5 * proportional_speed)  # will match the non-sqrt value when 50% max speed
 
         # 3. if target angle is on the right, we should really turn right (negative turn speed)
-        turnSpeed = min([proportionalSpeed, 1.0])
-        if degreesRemaining < 0:
-            turnSpeed = -turnSpeed
+        turn_speed = min([proportional_speed, 1.0])
+        if degrees_remaining < 0:
+            turn_speed = -turn_speed
 
-        return turnSpeed, degreesRemaining
+        return turn_speed, degrees_remaining
 
-    def getVisionBasedSwerveLeftSpeed(self, now):
+    def get_vision_based_swerve_left_speed(self, _now):
         # can we trust the last seen object?
         if not (self.lastSeenObjectSize > 0):
             return 0.0  # the object is not yet there, hoping that this is temporary
 
         # where are we?
-        robotX, robotY = self.localize()
+        robot_x, robot_y = self.localize()
 
         # which speed to use to reduce robotY
-        leftSpeed = self.computeProportionalSpeed(abs(robotY))
-        if robotY > 0:
-            leftSpeed = -leftSpeed
+        left_speed = self.compute_proportional_speed(abs(robot_y))
 
-        return leftSpeed
+        if robot_y > 0:
+            left_speed = -left_speed
+
+        return left_speed
 
     def localize(self):
         """
         localize the robot camera in the frame of the tag
         """
-        distanceToTag = self.lastSeenDistanceToTag
+        distance_to_tag = self.lastSeenDistanceToTag
 
         # trigonometry: how many meters on the left is our tag? (if negative, then it's on the right)
         angle = Rotation2d.fromDegrees(self.lastSeenObjectX)
-        y = -distanceToTag * angle.sin()
+        y = -distance_to_tag * angle.sin()
 
-        distanceToFinalApproach = distanceToTag
-        return -distanceToFinalApproach, -y
+        distance_to_final_approach = distance_to_tag
+        return -distance_to_final_approach, -y
 
-    def computeProportionalSpeed(self, distance) -> float:
-        kpMultTran = self.KPMULT_TRANSLATION.value
-        velocity = distance * GoToPointConstants.kPTranslate * kpMultTran
+    def compute_proportional_speed(self, distance) -> float:
+        kp_mult_tran = self.KPMULT_TRANSLATION.value
+        velocity = distance * GoToPointConstants.KP_TRANSLATE * kp_mult_tran
+
         if GoToPointConstants.USE_SQRT_CONTROL:
-            velocity = math.sqrt(0.5 * velocity * kpMultTran)
+            velocity = math.sqrt(0.5 * velocity * kp_mult_tran)
+
         if velocity > 1.0:
             velocity = 1.0
-        if velocity < GoToPointConstants.kMinTranslateSpeed:
-            velocity = GoToPointConstants.kMinTranslateSpeed
+
+        if velocity < GoToPointConstants.MIN_TRANSLATE_SPEED:
+            velocity = GoToPointConstants.MIN_TRANSLATE_SPEED
+
         return velocity
 
-    def computeTagDistanceFromTagSizeOnFrame(self, objectSizePercent):
+    @staticmethod
+    def compute_tag_distance_from_tag_size_on_frame(object_size: percent):
         """
         # if a 0.2*0.2 meter AprilTag appears to take 1% of the screen on a 1.33-square-radian FOV camera...
         #   angular_area = area / distance^2
@@ -679,17 +741,19 @@ class ApproachManually(commands2.Command):
         #
         # in other words, we can use this approximate formula for distance (if we have 0.2 * 0.2 meter AprilTag)
         """
-        return math.sqrt(0.2 * 0.2 / (1.70 * 0.01 * objectSizePercent))
+        return math.sqrt(0.2 * 0.2 / (1.70 * 0.01 * object_size))
         # note: Arducam w OV9281 (and Limelight 3 / 4) is 0.57 sq radians (not 1.33)
 
-    def updateVision(self, now):
+    def update_vision(self, now):
         if self.camera.hasDetection():
             x = self.camera.getX()
             a = self.camera.getA()
-            if x != 0 and a > 0 and a < 3:
-                self.lastSeenDistanceToTag = self.computeTagDistanceFromTagSizeOnFrame(a)
+
+            if x != 0 and 0 < a < 3:
+                self.lastSeenDistanceToTag = self.compute_tag_distance_from_tag_size_on_frame(a)
                 self.lastSeenObjectTime = now
                 self.lastSeenObjectSize = a
                 self.lastSeenObjectX = x
+
                 if not self.everSawObject:
                     self.everSawObject = True

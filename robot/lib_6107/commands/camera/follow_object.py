@@ -34,7 +34,7 @@ from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 class FollowObject(commands2.Command):
     ANGLE_TOLERANCE = 50  # if pointing further away than this, do not move forward (rotate towards the object first)
     MIN_STEP_SECONDS = 0.038  # the robot is making 50 decisions per second, so we don't realistically want shorter step
-    MIN_SPEED = GoToPointConstants.kMinTranslateSpeed
+    MIN_SPEED = GoToPointConstants.MIN_TRANSLATE_SPEED
 
     def __init__(self,
                  camera,

@@ -219,7 +219,7 @@ class JerkyTrajectory(commands2.Command):
             )
         else:
             command = SwerveToPoint(
-                point.x, point.y, heading, drivetrain=self.drivetrain, speed=self.speed, slowDownAtFinish=slowdown,
+                point.x, point.y, heading, drivetrain=self.drivetrain, speed=self.speed, slow_down_at_finish=slowdown,
                 rate_limit=not last
             )
 
@@ -320,7 +320,7 @@ class SwerveTrajectory(JerkyTrajectory):
 
         # If the robot fell behind the trajectory (trajectory speed too high in optimizer), brute-force catch up @ end
         catchup = SwerveToPoint(
-            endPt.x, endPt.y, endHeading, drivetrain=self.drivetrain, speed=self.speed, slowDownAtFinish=True
+            endPt.x, endPt.y, endHeading, drivetrain=self.drivetrain, speed=self.speed, slow_down_at_finish=True
         ).beforeStarting(
             lambda: SmartDashboard.putString("command/c" + self.__class__.__name__, f"catchup: {endPt.x}, {endPt.y}")
         )

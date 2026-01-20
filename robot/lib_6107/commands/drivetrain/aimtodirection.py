@@ -23,12 +23,15 @@
 import math
 from typing import Callable, Optional
 
-import commands2
+from commands2 import Command
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
-from wpimath.units import degrees, meters_per_second
+from wpimath.units import degrees
 
 from subsystems.swervedrive.constants import AutoConstants
+from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+
+from pathplannerlib.auto import NamedCommands
 
 class AimToDirectionConstants:
     kP = 0.001  # 0.002 is the default, but you must calibrate this to your robot
@@ -39,14 +42,14 @@ class AimToDirectionConstants:
     ANGLE_VELOCITY_TOLERANCE_DEGREES_PER_SEC = 1  # velocity under 100 degrees/second is considered "stopped"
 
 
-class AimToDirection(commands2.Command):
-    def __init__(self, drivetrain: 'DriveSubsystem',
-                 degrees: Optional[degrees | Callable[[], degrees]],
+class AimToDirection(Command):
+    def __init__(self, drivetrain: DriveSubsystem,
+                 heading: Optional[Rotation2d | Callable[[], Rotation2d]],
                  speed: Optional[float] = 1.0,
                  fwd_speed: Optional[float] = 0.0):
         super().__init__()
 
-        self._drivetrain: 'DriveSubsystem' = drivetrain
+        self._drivetrain: DriveSubsystem = drivetrain
         self.addRequirements(drivetrain)
 
         self._speed = min((1.0, abs(speed)))
@@ -54,13 +57,25 @@ class AimToDirection(commands2.Command):
         self._fwd_speed = fwd_speed
 
         # setting the target angle in a way that works for all cases
-        self._target_degrees = degrees
+        self._target_degrees = heading
 
         if degrees is None:
             self._target_degrees = lambda: self._drivetrain.heading.degrees()
 
         elif not callable(degrees):
             self._target_degrees = lambda: degrees
+
+    @staticmethod
+    def pathplanner_register(drivetrain: DriveSubsystem) -> None:
+        """
+        This command factory can be used with register this command
+        and make it available from within PathPlanner
+        """
+        def _cmd(**kwargs) -> Command:
+            return AimToDirection(drivetrain, **kwargs)
+
+        # Register the function itself
+        NamedCommands.registerCommand("AimToDirection", _cmd)
 
     def initialize(self):
         self._target_direction = Rotation2d.fromDegrees(self._target_degrees())

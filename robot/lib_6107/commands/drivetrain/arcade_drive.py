@@ -22,10 +22,11 @@ from commands2 import Command
 from wpimath.units import meters_per_second, radians_per_second
 
 from pathplannerlib.auto import NamedCommands
+from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class ArcadeDrive(Command):
-    def __init__(self, drivetrain: 'DriveSubsystem',
+    def __init__(self, drivetrain: DriveSubsystem,
                  drive_speed: Optional[meters_per_second] = 0.0,
                  rotation_speed: Optional[radians_per_second] = 0.0,
                  assume_manual_input: Optional[bool] = False):
@@ -47,7 +48,7 @@ class ArcadeDrive(Command):
         self.addRequirements(drivetrain)
 
     @staticmethod
-    def pathplanner_register(drivetrain: 'DriveSubsystem') -> None:
+    def pathplanner_register(drivetrain: DriveSubsystem) -> None:
         """
         This command factory can be used with register this command
         and make it available from within PathPlanner

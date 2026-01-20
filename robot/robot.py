@@ -98,7 +98,7 @@ class MyRobot(MyRobotBase):
         if USE_PYKIT:
             Logger.recordMetadata("Robot", "Team6107-2026")
 
-            match constants.kRobotMode:
+            match constants.ROBOT_MODE:
                 case constants.RobotModes.REAL:
                     # TODO: logger.setLevel(logging.ERROR)
                     deploy_config = wpilib.deployinfo.getDeployData()
@@ -181,7 +181,6 @@ class MyRobot(MyRobotBase):
         Default period is 20 mS.
         """
         self._time_and_joystick_replay.update()
-        super().robotPeriodic()
 
         self._counter += 1
 

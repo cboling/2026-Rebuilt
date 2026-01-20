@@ -19,25 +19,25 @@
 import os
 from enum import Enum
 
+from magicbot import tunable
 from wpilib import RobotBase
-from wpimath import units
+from wpimath.units import kilograms, lbsToKilograms
+
+from generated.tuner_constants import TunerConstants    # Use Tuner X constants if available
 
 USE_PYKIT = False
 
 class RobotModes(Enum):
     """Enum for robot modes."""
-
     REAL = 1
     SIMULATION = 2
     REPLAY = 3
 
-
-kSimMode = (
-    RobotModes.REPLAY
-    if "LOG_PATH" in os.environ and os.environ["LOG_PATH"] != ""
+SIM_MODE = (
+    RobotModes.REPLAY  if "LOG_PATH" in os.environ and os.environ["LOG_PATH"] != ""
     else RobotModes.SIMULATION
 )
-kRobotMode = RobotModes.REAL if RobotBase.isReal() else kSimMode
+ROBOT_MODE = RobotModes.REAL if RobotBase.isReal() else SIM_MODE
 
 ###############################################################################
 # OPENTelemetry Support
@@ -52,13 +52,12 @@ OTEL_OLTP_ENDPOINT = os.getenv("OTEL_OLTP_ENDPOINT", default="supermicro:4317")
 # class should not be used for any other purpose. All constants should be declared globally (i.e. public static). Do
 # not put anything functional in this class.
 
-ROBOT_MASS = units.lbsToKilograms(148 - 20.3)  # 32lbs * kg per pound
+ROBOT_MASS: kilograms = lbsToKilograms(148 - 20.3)  # 32lbs * kg per pound
 # CHASSIS    = Matter(geometry.Translation3d(0, 0, units.inchesToMeters(8)), ROBOT_MASS)        TODO: Figure this out
 LOOP_TIME = 0.13  # seconds, 20ms + 110ms sprk max velocity lag
 
 # Maximum speed of the robot in meters per second, used to limit acceleration.
-#    1.45 feet is 4.4196 meters
-MAX_SPEED = units.feetToMeters(14.5)
+MAX_SPEED = TunerConstants.speed_at_12_volts
 
 I_INTAKE_EXTEND_MAX = 100
 

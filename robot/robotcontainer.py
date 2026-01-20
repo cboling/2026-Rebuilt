@@ -27,9 +27,11 @@ from commands2.button import Trigger
 from commands2 import Subsystem, Command, RunCommand, InstantCommand, cmd, button
 from phoenix6 import swerve
 from wpilib import RobotBase, XboxController, SmartDashboard, SendableChooser, Field2d, DriverStation
-from wpimath.units import rotationsToRadians
+from wpimath.units import rotationsToRadians, meters_per_second, radians_per_second
 
 import constants
+
+from autonomous import pathplanner
 from generated.tuner_constants import TunerConstants
 from subsystems.constants import FRONT_CAMERA_TYPE, CAMERA_TYPE_LIMELIGHT, \
     CAMERA_TYPE_PHOTONVISION, FRONT_CAMERA_POSE_AND_HEADING, REAR_CAMERA_TYPE
@@ -69,9 +71,10 @@ class RobotContainer:
         self.robot = robot
         self.simulation = RobotBase.isSimulation()
 
-        # Phoenix6 max settings and telemetry support
-        self._max_speed = (1.0 * TunerConstants.speed_at_12_volts)  # speed_at_12_volts desired top speed
-        self._max_angular_rate = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
+        # Phoenix6 max settings and telemetry support. During the actual drive command or the
+        # arcade_drive function, we apply any scale factor to limit speed
+        self._max_speed: meters_per_second = (1.0 * constants.MAX_SPEED)  # speed_at_12_volts desired top speed
+        self._max_angular_rate: radians_per_second = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
         self._logger = Telemetry(self._max_speed)
 
         # Alliance support
@@ -140,6 +143,12 @@ class RobotContainer:
         # self.robot_drive = DriveSubsystem(self, **drive_kwargs)
         self.robot_drive = TunerConstants.create_drivetrain(self, **drive_kwargs)
 
+        # # Init the Auto chooser.  PathPlanner init will fill in our choices
+        # self.autoChooser: LoggedDashboardChooser[Command] = LoggedDashboardChooser("Auto Choices")
+        # Register all the library 'named' commands we may wish to use
+        #self._auto_chooser = pathplanner.register_commands_and_triggers(self)
+        self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, "")
+
         if FRONT_CAMERA_TYPE == CAMERA_TYPE_LIMELIGHT:
             # TODO: Make pose and heading below as constants
             self.localizer = LimelightLocalizer(self, self.robot_drive)
@@ -168,9 +177,9 @@ class RobotContainer:
         for controller, is_driver in ((self.driver_controller, True),
                                       (self.controller_shooter, False)):
             if isinstance(controller, button.CommandXboxController):
-                self.configureButtonBindings_xbox(controller, is_driver)
+                self.configure_button_bindings_xbox(controller, is_driver)
             else:
-                self.configureButtonBindings_Joystick(controller, is_driver)
+                self.configure_button_bindings_joystick(controller, is_driver)
 
         # Speed limiter useful during initial development
         self.configureSpeedLimiter()
@@ -215,20 +224,12 @@ class RobotContainer:
         #
 
     @property
-    def elevator(self) -> Subsystem:
-        return self._elevator
+    def max_speed(self) -> meters_per_second:
+        return self._max_speed * self.robot_drive.drive_scale_factor
 
     @property
-    def intake_left(self) -> Subsystem:
-        return self._intake_left
-
-    @property
-    def intake_right(self) -> Subsystem:
-        return self._intake_right
-
-    @property
-    def intake_extend(self) -> Subsystem:
-        return self._intake_extend
+    def max_angular_rate(self) -> radians_per_second:
+        return self._max_angular_rate * self.robot_drive.drive_scale_factor
 
     @property
     def field(self) -> Field2d:
@@ -300,88 +301,85 @@ class RobotContainer:
     def elapsed_time(self) -> float:
         return time.time() - self.start_time
 
-    def configureButtonBindings_xbox(self, controller, is_driver: bool) -> None:
+    def configure_button_bindings_xbox(self, controller, is_driver: bool) -> None:
 
         # Note that X is defined as forward according to WPILib convention,
         # and Y is defined as to the left according to WPILib convention.
-        self.robot_drive.setDefaultCommand(
-            # Drivetrain will execute this command periodically
-            self.robot_drive.apply_request(
-                lambda: (
-                    self.robot_drive.drive_request.with_velocity_x(-self.driver_controller.getLeftY() * self._max_speed)
-                    .with_velocity_y(-self.driver_controller.getLeftX() * self._max_speed)
-                    .with_rotational_rate(-self.driver_controller.getRightX() * self._max_angular_rate)
-                )
-            )
-        )
-        # Idle while the robot is disabled. This ensures the configured
-        # neutral mode is applied to the drive motors while disabled.
-        idle = swerve.requests.Idle()
-        Trigger(DriverStation.isDisabled).whileTrue(
-            self.robot_drive.apply_request(lambda: idle).ignoringDisable(True)
-        )
-
-        self.driver_controller.a().whileTrue(self.robot_drive.apply_request(lambda: self.robot_drive.brake_request))
-        self.driver_controller.b().whileTrue(
-            self.robot_drive.apply_request(
-                lambda: self.robot_drive.point_request.with_module_direction(
-                    Rotation2d(-self.driver_controller.getLeftY(), -self.driver_controller.getLeftX())
-                )
-            )
-        )
-
-        self.driver_controller.povUp().whileTrue(
-            self.robot_drive.apply_request(
-                lambda: self.robot_drive.forward_straight_request.with_velocity_x(0.5).with_velocity_y(0)
-            )
-        )
-        self.driver_controller.povDown().whileTrue(
-            self.robot_drive.apply_request(
-                lambda: self.robot_drive.forward_straight_request.with_velocity_x(-0.5).with_velocity_y(0)
-            )
-        )
-
-        # Run SysId routines when holding back/start and X/Y.
-        # Note that each routine should be run exactly once in a single log.
-        (self.driver_controller.back() & self.driver_controller.y()).whileTrue(
-            self.robot_drive.sys_id_dynamic(SysIdRoutine.Direction.kForward)
-        )
-        (self.driver_controller.back() & self.driver_controller.x()).whileTrue(
-            self.robot_drive.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
-        )
-        (self.driver_controller.start() & self.driver_controller.y()).whileTrue(
-            self.robot_drive.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
-        )
-        (self.driver_controller.start() & self.driver_controller.x()).whileTrue(
-            self.robot_drive.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
-        )
-
-        # reset the field-centric heading on left bumper press
-        self.driver_controller.leftBumper().onTrue(
-            self.robot_drive.runOnce(self.robot_drive.seed_field_centric)
-        )
-
-        self.robot_drive.register_telemetry(
-            lambda state: self._logger.telemeterize(state)
-        )
-
-        """
-        Use this method to define your button->command mappings. Buttons can be created by
-        instantiating a :GenericHID or one of its subclasses (Joystick or XboxController),
-        and then passing it to a JoystickButton.
-        """
-        logger.debug(f"*** called configureButtonBindings, controller: {controller}, is_driver: {is_driver}")
-
-        # TODO: call subsystems to do this
-        # TODO: The java application had a different commands tied to default and the left/right
-        #       bumper (buttons) on the XBox.
-        # TODO: Need to reconcile with java cade
-        # # driveFieldOrientedDirectAngle      = robot_drive.driveFieldOriented(self.driveDirectAngle)
-        # driveFieldOrientedAngularVelocity = self.robot_drive.driveFieldOriented(self.driveAngularVelocity)
-        # driveRobotOrientedAngularVelocity = self.robot_drive.driveFieldOriented(self.driveRobotOriented)
-        #
-        # self.robot_drive.setDefaultCommand(driveFieldOrientedAnglularVelocity)
         if is_driver:
+            self.robot_drive.setDefaultCommand(
+                # Drivetrain will execute this command periodically
+                self.robot_drive.apply_request(
+                    lambda: (
+                        self.robot_drive.drive_request.with_velocity_x(-self.driver_controller.getLeftY() * self.max_speed)
+                        .with_velocity_y(-self.driver_controller.getLeftX() * self.max_speed)
+                        .with_rotational_rate(-self.driver_controller.getRightX() * self.max_angular_rate)
+                    )
+                )
+            )
+            # Idle while the robot is disabled. This ensures the configured
+            # neutral mode is applied to the drive motors while disabled.
+            idle = swerve.requests.Idle()
+            Trigger(DriverStation.isDisabled).whileTrue(
+                self.robot_drive.apply_request(lambda: idle).ignoringDisable(True)
+            )
+
+            self.driver_controller.a().whileTrue(self.robot_drive.apply_request(lambda: self.robot_drive.brake_request))
+            self.driver_controller.b().whileTrue(
+                self.robot_drive.apply_request(
+                    lambda: self.robot_drive.point_request.with_module_direction(
+                        Rotation2d(-self.driver_controller.getLeftY(), -self.driver_controller.getLeftX())
+                    )
+                )
+            )
+
+            self.driver_controller.povUp().whileTrue(
+                self.robot_drive.apply_request(
+                    lambda: self.robot_drive.forward_straight_request.with_velocity_x(0.5).with_velocity_y(0)
+                )
+            )
+            self.driver_controller.povDown().whileTrue(
+                self.robot_drive.apply_request(
+                    lambda: self.robot_drive.forward_straight_request.with_velocity_x(-0.5).with_velocity_y(0)
+                )
+            )
+
+            # Run SysId routines when holding back/start and X/Y.
+            # Note that each routine should be run exactly once in a single log.
+            (self.driver_controller.back() & self.driver_controller.y()).whileTrue(
+                self.robot_drive.sys_id_dynamic(SysIdRoutine.Direction.kForward)
+            )
+            (self.driver_controller.back() & self.driver_controller.x()).whileTrue(
+                self.robot_drive.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
+            )
+            (self.driver_controller.start() & self.driver_controller.y()).whileTrue(
+                self.robot_drive.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
+            )
+            (self.driver_controller.start() & self.driver_controller.x()).whileTrue(
+                self.robot_drive.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
+            )
+
+            # reset the field-centric heading on left bumper press
+            self.driver_controller.leftBumper().onTrue(self.robot_drive.runOnce(self.robot_drive.seed_field_centric))
+
+            self.robot_drive.register_telemetry(lambda state: self._logger.telemeterize(state))
+
+            """
+            Use this method to define your button->command mappings. Buttons can be created by
+            instantiating a :GenericHID or one of its subclasses (Joystick or XboxController),
+            and then passing it to a JoystickButton.
+            """
+            logger.debug(f"*** called configureButtonBindings, controller: {controller}, is_driver: {is_driver}")
+
+            # TODO: call subsystems to do this
+            # TODO: The java application had a different commands tied to default and the left/right
+            #       bumper (buttons) on the XBox.
+            # TODO: Need to reconcile with java cade
+            # # driveFieldOrientedDirectAngle      = robot_drive.driveFieldOriented(self.driveDirectAngle)
+            # driveFieldOrientedAngularVelocity = self.robot_drive.driveFieldOriented(self.driveAngularVelocity)
+            # driveRobotOrientedAngularVelocity = self.robot_drive.driveFieldOriented(self.driveRobotOriented)
+            #
+            # self.robot_drive.setDefaultCommand(driveFieldOrientedAnglularVelocity)
+
             # Robot Driver (primarily responsible for robot path
 
             controller.a().onTrue(cmd.runOnce(lambda: self.robot_drive.zeroGyro))
@@ -398,7 +396,7 @@ class RobotContainer:
             # Robot Operator (responsible for intakes, shooters, ...)
             pass
 
-    def configureButtonBindings_Joystick(self, controller, is_driver: bool) -> None:
+    def configure_button_bindings_joystick(self, controller, is_driver: bool) -> None:
         """
         Use this method to define your button->command mappings. Buttons can be created by
         instantiating a :GenericHID or one of its subclasses (Joystick or XboxController),
