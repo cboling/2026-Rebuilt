@@ -27,7 +27,7 @@ from commands2.button import Trigger
 from commands2 import Subsystem, Command, RunCommand, InstantCommand, cmd, button
 from phoenix6 import swerve
 from wpilib import RobotBase, XboxController, SmartDashboard, SendableChooser, Field2d, DriverStation
-from wpimath.units import rotationsToRadians, meters_per_second, radians_per_second
+from wpimath.units import rotationsToRadians, meters_per_second, radians_per_second, degreesToRadians
 
 import constants
 
@@ -73,7 +73,7 @@ class RobotContainer:
 
         # Phoenix6 max settings and telemetry support. During the actual drive command or the
         # arcade_drive function, we apply any scale factor to limit speed
-        self._max_speed: meters_per_second = (1.0 * constants.MAX_SPEED)  # speed_at_12_volts desired top speed
+        self._max_speed: meters_per_second = constants.MAX_SPEED  # speed_at_12_volts desired top speed
         self._max_angular_rate: radians_per_second = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
         self._logger = Telemetry(self._max_speed)
 
@@ -143,10 +143,7 @@ class RobotContainer:
         # self.robot_drive = DriveSubsystem(self, **drive_kwargs)
         self.robot_drive = TunerConstants.create_drivetrain(self, **drive_kwargs)
 
-        # # Init the Auto chooser.  PathPlanner init will fill in our choices
-        # self.autoChooser: LoggedDashboardChooser[Command] = LoggedDashboardChooser("Auto Choices")
-        # Register all the library 'named' commands we may wish to use
-        #self._auto_chooser = pathplanner.register_commands_and_triggers(self)
+        # Init the Auto chooser.  PathPlanner init will fill in our choices
         self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, "")
 
         if FRONT_CAMERA_TYPE == CAMERA_TYPE_LIMELIGHT:
@@ -181,11 +178,12 @@ class RobotContainer:
             else:
                 self.configure_button_bindings_joystick(controller, is_driver)
 
-        # Speed limiter useful during initial development
-        self.configureSpeedLimiter()
+        # Configure the additional autos that do not come from pathplanner
+        self.configure_additional_autos()
 
-        # Configure the autos
-        self.configureAutos()
+        # Speed limiter useful during initial development
+        self._limit_chooser = None
+        self.configure_speed_limiter()
 
         ########################################################
         # Initialize the Smart dashboard for each subsystem
@@ -326,7 +324,7 @@ class RobotContainer:
             self.driver_controller.a().whileTrue(self.robot_drive.apply_request(lambda: self.robot_drive.brake_request))
             self.driver_controller.b().whileTrue(
                 self.robot_drive.apply_request(
-                    lambda: self.robot_drive.point_request.with_module_direction(
+                    lambda: self.robot_drive.point_at_request.with_module_direction(
                         Rotation2d(-self.driver_controller.getLeftY(), -self.driver_controller.getLeftX())
                     )
                 )
@@ -414,53 +412,49 @@ class RobotContainer:
         """
         self.robot_drive.set_motor_brake(True)
 
-    def getAutonomousCommand(self) -> Command:
+    def get_autonomous_command(self) -> Command:
         """
         :returns: the command to run in autonomous
         """
-        command = self.chosenAuto.getSelected()
-        return command()
+        command = self._auto_chooser.getSelected()
+        return command
 
-    def configureSpeedLimiter(self):
+    def configure_speed_limiter(self):
         """
         Overall speed limitation scaling factor
         """
-        self.chosenLimiter = SendableChooser()
+        self._limit_chooser = SendableChooser()
 
         # you can also set the default option, if needed
-        self.chosenLimiter.addOption("10%", 0.1)
-        self.chosenLimiter.addOption("20%", 0.2)
-        self.chosenLimiter.addOption("40%", 0.4)
-        self.chosenLimiter.addOption("60%", 0.6)
-        self.chosenLimiter.setDefaultOption("100%", 1.0)
+        self._limit_chooser.addOption("10%", 0.1)
+        self._limit_chooser.addOption("20%", 0.2)
+        self._limit_chooser.addOption("40%", 0.4)
+        self._limit_chooser.addOption("60%", 0.6)
+        self._limit_chooser.setDefaultOption("100%", 1.0)
 
-        SmartDashboard.putData("Drive rate limiter", self.chosenLimiter)
+        SmartDashboard.putData("Drive rate limiter", self._limit_chooser)
 
-    def configureAutos(self):
+    def configure_additional_autos(self):
         """
-        Implement a dashboard "'"Chosen" dialog that allows us to select which 'automation'
+        Add to dashboard "'"Chosen" dialog that allows us to select which 'automation'
         commands to run when we enter the Autonomous phase.
-        """
-        self.chosenAuto = SendableChooser()
 
-        # TODO: Create more than one for both red and blue aliances, perhaps even have them
-        #       mapped out to show our allies so we can maximize the chance of scoring more
-        #       during the autonomous stage
-        # you can also set the default option, if needed
-        self.chosenAuto.setDefaultOption("Do nothing", self.getDoNothing)
-        self.chosenAuto.addOption("trajectory example", self.getAutonomousTrajectoryExample)
-        self.chosenAuto.addOption("left blue", self.getAutonomousLeftBlue)
-        self.chosenAuto.addOption("left red", self.getAutonomousLeftRed)
+        TODO:  THIS IS JUST A TEST.  USE PATHPLANNER FOR ALL AUTONOMOUS MODE PATHS
+        """
+        self._auto_chooser.setDefaultOption("Do nothing", self.get_do_nothing)
+        self._auto_chooser.addOption("trajectory example", self.get_autonomous_trajectory_example)
+        self._auto_chooser.addOption("left blue", self.get_autonomous_left_blue)
+        self._auto_chooser.addOption("left red", self.get_autonomous_left_red)
 
         # If vision based odometry is supported, add in their auto commands
         if self.vision_odometry:
             # TODO: would be a good thing to add into kwargs passed in or do something with
             #       the subsystems class we want to derive
-            self.chosenAuto.addOption("Approach tag", self.getApproachTagCommand)
+            self._auto_chooser.addOption("Approach tag", self.getApproachTagCommand)
 
-        SmartDashboard.putData("Chosen Auto", self.chosenAuto)
+        SmartDashboard.putData("Chosen Auto", self._auto_chooser)
 
-    def getDoNothing(self) -> Command:
+    def get_do_nothing(self) -> Command:
         """
         Have robot stop
 
@@ -468,17 +462,17 @@ class RobotContainer:
         """
         return InstantCommand(lambda: self.robot_drive.stop())
 
-    def getAutonomousLeftBlue(self) -> Command:
-        setStartPose = ResetXY(x=0.783, y=6.686, heading_degrees=+60, drivetrain=self.robot_drive)
-        driveForward = RunCommand(lambda: self.robot_drive.arcade_drive(xSpeed=1.0, rot=0.0), self.robot_drive)
+    def get_autonomous_left_blue(self) -> Command:
+        set_start_pose = ResetXY(self.robot_drive, x=0.783, y=6.686, heading=60)
+        drive_forward = RunCommand(lambda: self.robot_drive.arcade_drive(dpeed=1.0, rot=0.0), self.robot_drive)
         stop = InstantCommand(lambda: self.robot_drive.stop())
 
-        command = setStartPose.andThen(driveForward.withTimeout(1.0)).andThen(stop)
+        command = set_start_pose.andThen(drive_forward.withTimeout(1.0)).andThen(stop)
         return command
 
-    def getAutonomousLeftRed(self) -> Command:
-        setStartPose = ResetXY(x=15.777, y=4.431, heading_degrees=-120, drivetrain=self.robot_drive)
-        driveForward = RunCommand(lambda: self.robot_drive.arcade_drive(xSpeed=1.0, rot=0.0), self.robot_drive)
+    def get_autonomous_left_red(self) -> Command:
+        setStartPose = ResetXY(self.robot_drive, x=15.777, y=4.431, heading=-120)
+        driveForward = RunCommand(lambda: self.robot_drive.arcade_drive(1.0, 0.0), self.robot_drive)
         stop = InstantCommand(lambda: self.robot_drive.stop())
 
         command = setStartPose.andThen(driveForward.withTimeout(2.0)).andThen(stop)
@@ -488,8 +482,8 @@ class RobotContainer:
         # Approach until the tag takes up 8% of the screen, then drive just a little bit more
         # to compress the robot against the wall the tag is on.
 
-        set_start_pose = ResetXY(x=8.7, y=7.3, heading_degrees=-180, drivetrain=self.robot_drive)
-        trajectory = JerkyTrajectory(drivetrain=self.robot_drive,
+        set_start_pose = ResetXY(self.robot_drive, x=8.7, y=7.3, heading=-180)
+        trajectory = JerkyTrajectory(self.robot_drive,
                                      endpoint=(2.59, 3.99, 0),
                                      waypoints=[
                                          (0.775, 7.26, 180),
@@ -499,107 +493,44 @@ class RobotContainer:
                                      ],
                                      speed=0.2)  # TODO: Increase speed once we know it works as expected
 
-        follow_tag = FollowObject(self.front_camera, self.robot_drive,
+        follow_tag = FollowObject(self.robot_drive, self.front_camera,
                                   stepSeconds=0.33,
                                   stopWhen=StopWhen(maxSize=8.0),
                                   speed=0.2)  # TODO: Increase speed once we know it works as expected
 
-        drive_forward = ArcadeDrive(drive_speed=0.15, rotation_speed=0.0,
-                                    drivetrain=self.robot_drive).withTimeout(0.3)  # Keep speed low here..
+        drive_forward = ArcadeDrive(self.robot_drive, drive_speed=0.15, rotation_speed=0.0).withTimeout(0.3)  # Keep speed low here..
 
-        # Drop corral command (not yet coded)
-        drop_corral = None
+        return set_start_pose.andThen(trajectory).andThen(follow_tag).andThen(drive_forward)
 
-        return set_start_pose.andThen(trajectory).andThen(follow_tag).andThen(drive_forward).andThen(drop_corral)
-
-    def getAutonomousTrajectoryExample(self) -> Command:
-        command = SwerveTrajectory(
-            drivetrain=self.robot_drive,
-            speed=+1.0,
-            waypoints=[
-                (1.0, 4.0, 0.0),  # start at x=1.0, y=4.0, heading=0 degrees (North)
-                (2.5, 5.0, 0.0),  # next waypoint: x=2.5, y=5.0
-                (3.0, 6.5, 0.0),  # next waypoint
-                (6.5, 5.0, -90),  # next waypoint
-            ],
-            endpoint=(6.0, 4.0, -180),  # end point: x=6.0, y=4.0, heading=180 degrees (South)
-            flipIfRed=False,  # if you want the trajectory to flip when team is red, set =True
-            stopAtEnd=True  # to keep driving onto next command, set =False
-        )
+    def get_autonomous_trajectory_example(self) -> Command:
+        command = SwerveTrajectory(self.robot_drive,
+                                   speed=+1.0,
+                                   waypoints=[
+                                       (1.0, 4.0, 0.0),  # start at x=1.0, y=4.0, heading=0 degrees (North)
+                                       (2.5, 5.0, 0.0),  # next waypoint: x=2.5, y=5.0
+                                       (3.0, 6.5, 0.0),  # next waypoint
+                                       (6.5, 5.0, -90),  # next waypoint
+                                   ],
+                                   endpoint=(6.0, 4.0, -180),  # end point: x=6.0, y=4.0, heading=180 degrees (South)
+                                   flipIfRed=False,  # if you want the trajectory to flip when team is red, set =True
+                                   stopAtEnd=True)  # to keep driving onto next command, set =False
         return command
 
     def getTestCommand(self) -> Optional[Command]:
         """
         :returns: the command to run in test mode ("test dance") to exercise all subsystems
         """
+        from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
 
         # example commands that test drivetrain's motors and gyro (our only subsystem)
-        turnRight = AimToDirection(degrees=-45, drivetrain=self.robot_drive, speed=0.25)
-        turnLeft = AimToDirection(degrees=45, drivetrain=self.robot_drive, speed=0.25)
-        backToZero = AimToDirection(degrees=0, drivetrain=self.robot_drive, speed=0.0)
+        turn_right = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(-45), speed=0.25)
+        turn_left = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(45), speed=0.25)
+        back_to_zero = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(0), speed=0.0)
 
-        command = turnRight.andThen(turnLeft).andThen(backToZero)
+        command = turn_right.andThen(turn_left).andThen(back_to_zero)
         return command
 
     def initialize_dashboard(self):
-        logger.info("*** called initialize_dashboard")
-        #
-        #  Taken from the FRC2429_2025 project   TODO: what do we need here
-        #
+        logger.debug("*** called initialize_dashboard")
 
-        #
-        # [self.led_indicator_chooser.addOption(key, value) for key, value in self.led.indicators_dict.items()]  # add all the indicators
-        # self.led_indicator_chooser.onChange(listener=lambda selected_value: commands2.CommandScheduler.getInstance().schedule(
-        #     SetLEDs(container=self, led=self.led, indicator=selected_value)))
-        # SmartDashboard.putData('LED Indicator', self.led_indicator_chooser)
 
-        # # commands for pyqt dashboard - please do not remove
-        # SmartDashboard.putData('MoveElevatorTop', MoveElevator(container=self, elevator=self.elevator, mode='specified', height=constants.ElevatorConstants.k_max_height-0.005 ))
-        # SmartDashboard.putData('MoveElevatorUp', MoveElevator(container=self, elevator=self.elevator, mode='incremental', height=0.1 ))
-        # SmartDashboard.putData('MoveElevatorDown', MoveElevator(container=self, elevator=self.elevator, mode='incremental', height=-0.1))
-        # SmartDashboard.putData('MovePivotUp', MovePivot(container=self, pivot=self.pivot, mode='incremental', angle=10))
-        # SmartDashboard.putData('MovePivotDown', MovePivot(container=self, pivot=self.pivot, mode='incremental', angle=-10))
-        # SmartDashboard.putData('MoveWristUp', MoveWrist(container=self, incremental=True, radians=degreesToRadians(30), timeout=0.2))
-        # SmartDashboard.putData('MoveWristDown', MoveWrist(container=self, incremental=True, radians=degreesToRadians(-30), timeout=0.2))
-        # SmartDashboard.putData('IntakeOn', RunIntake(container=self, intake=self.intake, value=6, stop_on_end=False))
-        # SmartDashboard.putData('IntakeOff', RunIntake(container=self, intake=self.intake, value=0, stop_on_end=False))
-        # SmartDashboard.putData('IntakeReverse', RunIntake(container=self, intake=self.intake, value=-6, stop_on_end=False))
-        # SmartDashboard.putData('Move climber up', MoveClimber(self, self.climber, 'incremental', math.radians(10)))
-        # SmartDashboard.putData('Move climber down', MoveClimber(self, self.climber, 'incremental', math.radians(-10)))
-        # SmartDashboard.putData('CANStatus', CANStatus(container=self))
-        # SmartDashboard.putData("ResetFlex", Reflash(container=self))
-        # SmartDashboard.putData('GoToScore', Score(container=self))
-        # SmartDashboard.putData('GoToStow', GoToStow(container=self))
-        # SmartDashboard.putData('GoToL1', InstantCommand(lambda: self.robot_state.set_target(RobotState.Target.L1)).ignoringDisable(True).andThen(GoToReefPosition(self, 1)))
-        # SmartDashboard.putData('GoToL2', InstantCommand(lambda: self.robot_state.set_target(RobotState.Target.L2)).ignoringDisable(True).andThen(GoToReefPosition(self, 2)))
-        # SmartDashboard.putData('GoToL3', InstantCommand(lambda: self.robot_state.set_target(RobotState.Target.L3)).ignoringDisable(True).andThen(GoToReefPosition(self, 3)))
-        # SmartDashboard.putData('GoToL4', InstantCommand(lambda: self.robot_state.set_target(RobotState.Target.L4)).ignoringDisable(True).andThen(GoToReefPosition(self, 4)))
-        # SmartDashboard.putData('Set valid tag IDs', SetValidTags(self, constants.VisionConstants.k_valid_tags))
-        # SmartDashboard.putData('CalElevatorUp', InstantCommand(lambda: self.elevator.offset_encoder_position_meters(0.025)).ignoringDisable(True))
-        # SmartDashboard.putData('CalElevatorDown', InstantCommand(lambda: self.elevator.offset_encoder_position_meters(-0.025)).ignoringDisable(True))
-        # SmartDashboard.putData('RecalWrist', RecalibrateWrist(container=self).withTimeout(10))
-        # SmartDashboard.putData('CalWristUp', InstantCommand(lambda: self.wrist.offset_encoder_position_degrees(2)).ignoringDisable(True))
-        # SmartDashboard.putData('CalWristDown', InstantCommand(lambda: self.wrist.offset_encoder_position_degrees(-2)).ignoringDisable(True))
-        # # end pyqt dashboard section
-
-        # # quick way to test all scoring positions from dashboard
-        # self.score_test_chooser = SendableChooser()
-        # [self.score_test_chooser.addOption(key, value) for key, value in self.robot_state.targets_dict.items()]  # add all the indicators
-        # self.score_test_chooser.onChange(
-        #     listener=lambda selected_value: commands2.CommandScheduler.getInstance().schedule(
-        #         cmd.runOnce(lambda: self.robot_state.set_target(target=selected_value))))
-        # SmartDashboard.putData('RobotScoringMode', self.score_test_chooser)
-        #
-        # self.auto_chooser = AutoBuilder.buildAutoChooser('')  # this loops through the path planner deploy directory
-        # self.auto_chooser.setDefaultOption('1:  Wait *CODE*', PrintCommand("** Running wait auto **").andThen(commands2.WaitCommand(15)))
-        # self.auto_chooser.addOption('2a: Drive 2s Straight *CODE*', PrintCommand("** Running drive by velocity swerve leave auto **").andThen(DriveByVelocitySwerve(self, self.swerve, Pose2d(0.1, 0, 0), 2)))
-        # self.auto_chooser.addOption('2b: Drive 2s To Driver Station *CODE*', PrintCommand("** Running drive by velocity swerve leave auto **").andThen(DriveByVelocitySwerve(self, self.swerve, Pose2d(0.1, 0, 0), 2.5, field_relative=True)))
-        # self.auto_chooser.addOption('3a: 1+2 Right from Center *CODE*', OnePlusTwoRight(self, start='center'))  # the working auto that score three coral on right
-        # self.auto_chooser.addOption('3b: 1+2 Right from Right *CODE*', OnePlusTwoRight(self, start='right'))  # the working auto that score three coral on right
-        # self.auto_chooser.addOption('4a: 1+2 Left from Center *CODE*', OnePlusTwoLeft(self, start='center'))  # simulated left version of code
-        # self.auto_chooser.addOption('4b: 1+2 Left from Left *CODE*', OnePlusTwoLeft(self, start='left'))  # simulated left version of code
-        # self.auto_chooser.addOption('5:  1+1 Left? *CODE*', OnePlusOne(self))  #  is there any reason for this?
-        # self.auto_chooser.addOption('6:  1+0 l4 auto aim', L4PreloadAutoAim(self))
-        # # self.auto_chooser.addOption('7: madtwon', MadtownGlaze(self))
-        # # self.auto_chooser.addOption('1+2 trough', OnePlusTwoTrough(self))  # not a real auto
-        # SmartDashboard.putData('autonomous routines', self.auto_chooser)  #

@@ -30,14 +30,16 @@ from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d, Translation2d
 
 from subsystems.swervedrive.constants import AutoConstants
-from subsystems.swervedrive.constants import DriveConstants
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 
 from pathplannerlib.auto import NamedCommands
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
+from constants import MAX_SPEED
+
+
 class GoToPointConstants:
-    KP_TRANSLATE = 0.25 / (DriveConstants.MAX_SPEED_METERS_PER_SECOND / 4.7)
+    KP_TRANSLATE = 0.25 / MAX_SPEED / 4.7
     USE_SQRT_CONTROL = AutoConstants.USE_SQRT_CONTROL
 
     MIN_TRANSLATE_SPEED = 0.035  # moving forward slower than this is unproductive
@@ -84,11 +86,11 @@ class GoToPoint(Command):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def _cmd(**kwargs) -> Command:
+        def command(**kwargs) -> Command:
             return GoToPoint(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("GoToPoint", _cmd)
+        NamedCommands.registerCommand("GoToPoint", command())
 
     def initialize(self):
         self._initial_position = self._drivetrain.pose.translation()

@@ -16,12 +16,16 @@
 # ------------------------------------------------------------------------ #
 #
 # Constants for source in this subdirectory will go here
+import math
 import os
 from enum import Enum
 
 from magicbot import tunable
 from wpilib import RobotBase
-from wpimath.units import kilograms, lbsToKilograms
+from wpimath.units import kilograms, lbsToKilograms, meters_per_second, meters, \
+    seconds, radians_per_second, rotationsToRadians
+
+from wpimath.trajectory import TrapezoidProfileRadians
 
 from generated.tuner_constants import TunerConstants    # Use Tuner X constants if available
 
@@ -39,34 +43,50 @@ SIM_MODE = (
 )
 ROBOT_MODE = RobotModes.REAL if RobotBase.isReal() else SIM_MODE
 
-###############################################################################
-# OPENTelemetry Support
-OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", default="cyberjagzz")
-OTEL_TRACE_EXPORTER = os.getenv("OTEL_TRACE_EXPORTER", default="console,otlp")
-OTEL_METRICS_EXPORTER = os.getenv("OTEL_METRICS_EXPORTER", default="console")
-OTEL_OLTP_ENDPOINT = os.getenv("OTEL_OLTP_ENDPOINT", default="supermicro:4317")
-
-# Constants from the 2025 JAVA program for the CyberJagzz robot
-#
-# The Constants class provides a convenient place for teams to hold robot-wide numerical or boolean constants. This
-# class should not be used for any other purpose. All constants should be declared globally (i.e. public static). Do
-# not put anything functional in this class.
-
+##################################################################
+# Robot Constants
 ROBOT_MASS: kilograms = lbsToKilograms(148 - 20.3)  # 32lbs * kg per pound
 # CHASSIS    = Matter(geometry.Translation3d(0, 0, units.inchesToMeters(8)), ROBOT_MASS)        TODO: Figure this out
 LOOP_TIME = 0.13  # seconds, 20ms + 110ms sprk max velocity lag
 
-# Maximum speed of the robot in meters per second, used to limit acceleration.
-MAX_SPEED = TunerConstants.speed_at_12_volts
+###############################################################################
+# Device CAN bus IDs
+DRIVER_CONTROLLER_PORT = 0
+SHOOTER_CONTROLLER_PORT = 1
 
-I_INTAKE_EXTEND_MAX = 100
+#################################################################
+# Drive subsystem related constants
+#
+# Maximum speed of the robot in meters per second, used to limit acceleration.
+
+MAX_SPEED: meters_per_second = TunerConstants.speed_at_12_volts         # TODO: Measure this
+MAX_ANGULAR_SPEED: radians_per_second = rotationsToRadians(0.75)        # TODO: Measure this
+MAX_ANGULAR_ACCELERATION: radians_per_second = rotationsToRadians(0.75) # Actually is radians/second^2
+
+# Constraint for the motion profiled robot angle controller
+THETA_CONTROLLER_CONSTRAINTS = TrapezoidProfileRadians.Constraints(MAX_ANGULAR_SPEED,
+                                                                   MAX_ANGULAR_ACCELERATION)
+# TODO: Do we need an 'Autonomous Mode' max speed, max accel, max_angular, ...
+
+WHEEL_RADIUS: meters        = TunerConstants._wheel_radius
+WHEEL_DIAMETER: meters      = WHEEL_RADIUS * 3
+WHEEL_CIRCUMFERENCE: meters = WHEEL_DIAMETER * math.pi
 
 # Hold time on motor brakes when disabled
-WHEEL_LOCK_TIME = 3  # seconds
+WHEEL_LOCK_TIME: seconds = 3  # seconds
 
 # Joystick Deadband
 JOYSTICK_DEADBAND = 0.1
 TURN_CONSTANT = 6
 
-DRIVER_CONTROLLER_PORT = 0
-SHOOTER_CONTROLLER_PORT = 1
+GYRO_REVERSED = False  # (affects field-relative driving)
+
+###############################################################################
+# OPENTelemetry Support
+
+OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", default="cyberjagzz")
+OTEL_TRACE_EXPORTER = os.getenv("OTEL_TRACE_EXPORTER", default="console,otlp")
+OTEL_METRICS_EXPORTER = os.getenv("OTEL_METRICS_EXPORTER", default="console")
+OTEL_OLTP_ENDPOINT = os.getenv("OTEL_OLTP_ENDPOINT", default="supermicro:4317")
+
+

@@ -15,22 +15,22 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
+import json
 import logging
 import math
+import os
+
 from collections import OrderedDict
 from typing import Callable
 from typing import Tuple, Optional, List, Dict, Sequence, Any
 
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
-from pathplannerlib.auto import AutoBuilder, RobotConfig
-from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 from phoenix6 import SignalLogger, swerve, units, utils
 from phoenix6.swerve.requests import RobotCentric, FieldCentric
 from phoenix6.swerve.swerve_module import SwerveModule
 from pykit.autolog import autolog_output, autologgable_output
 from pykit.logger import Logger
-from pykit.networktables.loggeddashboardchooser import LoggedDashboardChooser
 from wpilib import DriverStation, Notifier, RobotController
 from wpilib import SmartDashboard, Field2d, RobotBase
 from wpilib.sysid import SysIdRoutineLog
@@ -38,12 +38,12 @@ from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.kinematics import ChassisSpeeds, SwerveModuleState, \
     SwerveModulePosition
-from wpimath.units import degrees, inchesToMeters, rotationsToRadians, meters_per_second, radians_per_second
+from wpimath.units import degrees, rotationsToRadians, meters_per_second, radians_per_second
+from wpilib import getDeployDirectory
 
-from constants import USE_PYKIT, JOYSTICK_DEADBAND, MAX_SPEED
+from constants import USE_PYKIT, JOYSTICK_DEADBAND, MAX_SPEED, GYRO_REVERSED, WHEEL_RADIUS, WHEEL_CIRCUMFERENCE
 from field.field import FIELD_Y_SIZE, FIELD_X_SIZE
 from field.field import RED_TEST_POSE, BLUE_TEST_POSE
-from generated.tuner_constants import TunerConstants
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
@@ -137,6 +137,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
         self._container = container
         self._robot = container.robot
+        self._physics_controller = None
 
         # Camera/localizer defaults
         self.front_camera = None
@@ -167,7 +168,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             ])
 
         # Some useful requests amd constants
-        max_speed = (1.0 * MAX_SPEED)
+        max_speed = MAX_SPEED
         max_angular_rate = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
 
         # Setting up bindings for necessary control of the Phoenix6 swerve drive platform.
@@ -184,9 +185,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._forward_straight = (swerve.requests.RobotCentric().
                                   with_drive_request_type(swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE))
 
-       # The gyro/IMU sensor
+       # The gyro/IMU sensor  # TODO: may be able to pull
         self._gyro: Optional[Gyro] = Gyro.create("Pigeon2",
-                                                 DriveConstants.GYRO_REVERSED,
+                                                 GYRO_REVERSED,
                                                  inst=self.pigeon2)
         self._gyro.initialize()
         self._gyroInputs = GyroIO.GyroIOInputs()
@@ -197,12 +198,18 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self.magLimiter = SlewRateLimiter(DriveConstants.MAGNITUDE_SLEW_RATE)
         self.rotLimiter = SlewRateLimiter(DriveConstants.ROTATIONAL_SLEW_RATE)
 
-        # self.currentTranslationDir = 0.0
-        # self.currentTranslationMag = 0.0
-        # self.xSpeedDelivered = 0.0
-        # self.ySpeedDelivered = 0.0
-        # self.rotDelivered = 0.0
-        # self.prevTime = Timer.getFPGATimestamp()
+        self._robot_x_width = 0.4
+        self._robot_y_width = 0.4
+        try:
+            path = os.path.join(getDeployDirectory(), 'pathplanner', 'settings.json')
+
+            with open(path, 'r') as f:
+                settings = json.loads(f.read())
+                self._robot_x_width = settings.get("robotWidth", self._robot_x_width)
+                self._robot_y_width = settings.get("robotWidth", self._robot_y_width)
+
+        except FileNotFoundError:
+            pass
 
         # Pykit support
         self._inputs = SwerveDriveIO.DriveIOInputs()
@@ -239,7 +246,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # #       we want the PPLTV Controller, should we use the AutoConstants or DriveConstants.
         # # controller = apriltag.k_pathplanner_holonomic_controller
         # controller = PPLTVController(1 / kwargs["pykit"]["Update Frequency"],
-        #                              DriveConstants.MAX_SPEED_METERS_PER_SECOND)
+        #                              MAX_SPEED)
         #
         # # # TODO: Validate what get_relative_speeds is suppose to return in the actual call.
         # # #       it looks like it is suppose to be 4 values and not a list of 4 values (ModuleStates)
@@ -471,27 +478,29 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     #     wheelSpeeds = self.kinematics.toWheelSpeeds(speeds)
     #     self.runClosedLoopParameters(wheelSpeeds.left, wheelSpeeds.right)
     #
-    # if USE_PYKIT:
-    #     def runClosedLoopParameters(self, leftSpeed: float, rightSpeed: float):
-    #         leftRadPerS = leftSpeed / driveconstants.kWheelRadius
-    #         rightRadPerS = rightSpeed / driveconstants.kWheelRadius
-    #
-    #         Logger.recordOutput("Drive/LeftSetpoint", leftRadPerS)
-    #         Logger.recordOutput("Drive/RightSetpoint", rightRadPerS)
-    #
-    #         leftFF = self.kS * sign(leftRadPerS) + self.kV * leftRadPerS
-    #         rightFF = self.kS * sign(rightRadPerS) + self.kV * rightRadPerS
-    #
-    #         self.io.setVelocity(leftRadPerS, rightRadPerS, leftFF, rightFF)
-    #
-    #     def runOpenLoop(self, leftV: float, rightV: float) -> None:
-    #         self.io.setVoltage(leftV, rightV)
-    #
-    #     def sysIdQuasistatic(self, direction: SysIdRoutine.Direction):
-    #         return self.sysid.quasistatic(direction)
-    #
-    #     def sysIdDynamic(self, direction: SysIdRoutine.Direction):
-    #         return self.sysid.dynamic(direction)
+    if USE_PYKIT:
+        def runClosedLoopParameters(self, left_speed: float, right_speed: float):
+            from numpy import sign
+
+            left_rad_per_s = left_speed / WHEEL_RADIUS
+            right_rad_per_s = right_speed / WHEEL_RADIUS
+
+            Logger.recordOutput("Drive/LeftSetpoint", left_rad_per_s)
+            Logger.recordOutput("Drive/RightSetpoint", right_rad_per_s)
+
+            left_ff = self.kS * sign(left_rad_per_s) + self.kV * left_rad_per_s
+            right_ff = self.kS * sign(right_rad_per_s) + self.kV * right_rad_per_s
+
+            self.io.setVelocity(left_rad_per_s, right_rad_per_s, left_ff, right_ff)
+
+        def runOpenLoop(self, left_v: float, right_v: float) -> None:
+            self.io.setVoltage(left_v, right_v)
+
+        def sysIdQuasistatic(self, direction: SysIdRoutine.Direction):
+            return self.sysid.quasistatic(direction)
+
+        def sysIdDynamic(self, direction: SysIdRoutine.Direction):
+            return self.sysid.dynamic(direction)
 
     def _alliance_change(self, is_red: bool, location: int) -> Pose2d:
         """
@@ -651,10 +660,10 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         if not kwargs:
             return None
 
-        now, tm_diff = kwargs["now"], kwargs["tm_diff"]
+        # now, tm_diff = kwargs["now"], kwargs["tm_diff"]
         amperes_used = 0.0  # TODO: Support in future
 
-        log_it = self._robot.counter % 20 == 0
+         # log_it = self._robot.counter % 20 == 0
 
         # Since simulation, limit it to the field of play
         pose = self.pose
@@ -662,13 +671,18 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # self.gyro.sim_yaw = pose.rotation().degrees()     # Not saving this yet.
 
         # Limit it to the field size (manually)
-        robot_x_offset = kwargs.get("robot_x_offset", .4)
-        robot_y_offset = kwargs.get("robot_y_offset", .4)
-        x = min(FIELD_X_SIZE - robot_x_offset, max(robot_x_offset, pose.x))
-        y = min(FIELD_Y_SIZE - robot_y_offset, max(robot_y_offset, pose.y))
+        robot_x_offset = self._robot_x_width / 2
+        robot_y_offset = self._robot_y_width / 2
 
-        if x != pose.x or y != pose.y:
-            self.pose = Pose2d(x, y, pose.rotation())
+        x, y = pose.x, pose.y
+
+        if x < robot_x_offset or x > FIELD_X_SIZE - robot_x_offset or \
+            y < robot_y_offset or y > FIELD_Y_SIZE - robot_y_offset:
+            x = min(FIELD_X_SIZE - robot_x_offset, max(robot_x_offset, x))
+            y = min(FIELD_Y_SIZE - robot_y_offset, max(robot_y_offset, y))
+
+            if x != pose.x or y != pose.y:
+                self.pose = Pose2d(x, y, pose.rotation())
 
         return amperes_used
 
@@ -716,9 +730,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         else:
             self.arcade_drive(0, 0, field_relative=True)
 
-    def arcade_drive(self, x_speed: meters_per_second, rot: radians_per_second, field_relative: Optional[bool] = False,
+    def arcade_drive(self, speed: meters_per_second, rot: radians_per_second, field_relative: Optional[bool] = False,
                      assume_manual_input: bool = False) -> None:
-        self.drive(x_speed, 0, rot, square=assume_manual_input, field_relative=field_relative)
+        self.drive(speed, 0, rot, square=assume_manual_input, field_relative=field_relative)
 
     def rotate(self, rotation: radians_per_second) -> None:
         """
@@ -753,12 +767,12 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         #     scaler = 0.1
         #
         # # Convert the commanded speeds into the correct units for the drivetrain
-        # self.xSpeedDelivered = xSpeedCommanded * DriveConstants.MAX_SPEED_METERS_PER_SECOND * scaler
-        # self.ySpeedDelivered = ySpeedCommanded * DriveConstants.MAX_SPEED_METERS_PER_SECOND * scaler
+        # self.xSpeedDelivered = xSpeedCommanded * MAX_SPEED * scaler
+        # self.ySpeedDelivered = ySpeedCommanded * MAX_SPEED * scaler
         # self.rotDelivered = self.currentRotation * DriveConstants.MAX_ANGULAR_SPEED * scaler
 
         scale_factor = self.drive_scale_factor
-        max_speed = DriveConstants.MAX_SPEED_METERS_PER_SECOND * scale_factor
+        max_speed = self._container.max_speed   # This is already adjusted by the scaling factor
 
         def adjust(rate: meters_per_second) -> meters_per_second:
             return min(max_speed, rate * scale_factor)
@@ -789,8 +803,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         angle_setter: PositionVoltage = PositionVoltage(0, 0, enable_foc=False, override_brake_dur_neutral=False)
         velocity_setter: VelocityTorqueCurrentFOC = VelocityTorqueCurrentFOC(0, 0)
         ticks_per_revolution = 4096
-        wheel_radius: units.meter = inchesToMeters(2)
-        wheel_circumference_meters = math.pi * wheel_radius * 2
+        wheel_radius: units.meter = WHEEL_RADIUS
+        wheel_circumference: meters = WHEEL_CIRCUMFERENCE
 
         try:
             # private VelocityTorqueCurrentFOC m_velocitySetter = new VelocityTorqueCurrentFOC(0);
@@ -802,7 +816,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 state.optimize(module.get_current_state().angle)
 
                 # Convert linear speed (m/s) to wheel rotations per second (RPS)
-                wheel_rps = state.speed / wheel_circumference_meters
+                wheel_rps = state.speed / wheel_circumference
                 angle_to_set = (state.angle.degrees() / 360.0) * ticks_per_revolution
 
                 steer_motor.set_control(angle_setter.with_position(angle_to_set))
@@ -826,7 +840,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         scaler = 1.0
 
         try:
-            scaler = self._container.chosenLimiter.getSelected()
+            scaler = self._container._limit_chooser.getSelected()
             if not isinstance(scaler, (int, float)):
                 logger.error(f"Invalid drive rate limiter: '{scaler}")
                 scaler = 0.1

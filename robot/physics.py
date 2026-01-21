@@ -31,6 +31,7 @@ import inspect
 import json
 import logging
 import os
+import time
 
 from pyfrc.physics.core import PhysicsInterface
 from wpilib import getDeployDirectory
@@ -56,7 +57,7 @@ class PhysicsEngine:
                                    to communicate simulation effects to
         :param robot: your robot object
         """
-        logger.info("PhysicsEngine: entry")
+        logger.info("PhysicsEngine.__init__: entry")
 
         self._physics_controller = physics_controller
         self._robot: MyRobot = robot
@@ -94,6 +95,8 @@ class PhysicsEngine:
         #       changed to the robot's field view and not the 'overhead' view of the
         #       playing field.
 
+        logger.info("PhysicsEngine.__init__: exit")
+
     def update_sim(self, now: float, tm_diff: float) -> None:
         """
         Called when the simulation parameters for the program need to be
@@ -103,12 +106,13 @@ class PhysicsEngine:
         :param tm_diff: The amount of time that has passed since the last
                         time that this function was called
         """
+        start = time.monotonic()
+
         kwargs = {
             "now": now,
             "tm_diff": tm_diff,
-            "robot_x_offset": self._robot_x_width / 2,
-            "robot_y_offset": self._robot_y_width / 2,
         }
+        # battery_voltage: volts = RobotController.getBatteryVoltage()
         total_amps_used: float = 0.0
 
         if self._robot.isEnabled():
@@ -124,6 +128,7 @@ class PhysicsEngine:
                         total_amps_used += subsystem.simulationPeriodic(**kwargs)
 
         # TODO: update simulated battery with amps consumed if real robo rio has a battery monitor as well
+        self._robot._stats.add("sim", time.monotonic() - start)
 
     def _alliance_change(self, is_red: bool, location: int) -> None:
         """

@@ -49,7 +49,7 @@ components = [
     "navx",
     "pathplannerlib",
     "phoenix6",
-    "rev",
+    # "rev",
     # "romi",
     "sim",
     # "xrp",
@@ -58,7 +58,7 @@ components = [
 # Other pip packages to install
 requires = [
     "pynetworktables",
-    "photonlibpy",
+    "photonlibpy>2026.0.1",
     "pyntcore",
     "robotpy-pykit>=1.0.1",
     "robotpy-pykit-watch>=1.0.0"

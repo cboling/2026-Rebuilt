@@ -37,8 +37,8 @@ class FollowObject(commands2.Command):
     MIN_SPEED = GoToPointConstants.MIN_TRANSLATE_SPEED
 
     def __init__(self,
-                 camera,
                  drivetrain: DriveSubsystem,
+                 camera,
                  stepSeconds=0.33,
                  stopWhen=None,
                  smoothness=1.0,

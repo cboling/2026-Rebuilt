@@ -5,7 +5,7 @@
 #
 
 import math
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 
 from commands2 import Command
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
@@ -64,14 +64,14 @@ class Tunable:
 class ApproachTag(Command):
 
     def __init__(self, drivetrain: DriveSubsystem,
-                 camera,
+                 camera: Optional[Any] = None,
                  specific_heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
-                 speed=1.0,
-                 reverse=False,
-                 settings: dict | None = None,
+                 speed: Optional[float]=1.0,
+                 reverse: Optional[bool]=False,
+                 settings: Optional[dict | None] = None,
                  push_forward: Optional[seconds | Callable[[], seconds]] = 0.0,  # length of final approach
                  push_forward_min_distance: Optional[meters] = 0.0,  # length of final approach in minimum distance
-                 final_approach_obj_size: Optional[percent] =10.0,
+                 final_approach_obj_size: Optional[percent] = 10.0,
                  detection_timeout: Optional[seconds] = 2.0,
                  camera_minimum_fps: Optional[int | float] = 4.0,
                  dashboard_name: Optional[str] = ""):
@@ -93,7 +93,7 @@ class ApproachTag(Command):
         assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
         self._drivetrain = drivetrain
-        self._camera = camera
+        self._camera = camera or drivetrain.front_camera
         self.addRequirements(drivetrain)
         self.addRequirements(camera)
 
@@ -154,11 +154,11 @@ class ApproachTag(Command):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def _cmd(**kwargs) -> Command:
+        def command(**kwargs) -> Command:
             return ApproachTag(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("ArcadeDrive", _cmd)
+        NamedCommands.registerCommand("ArcadeDrive", command())
 
     def isReady(self, min_required_object_size=0.3):
         return self._camera.hasDetection() and self._camera.getA() > min_required_object_size

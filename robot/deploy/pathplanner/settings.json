@@ -1,12 +1,12 @@
 {
   "robotWidth": 0.66,
   "robotLength": 0.66,
-  "holonomicMode": false,
+  "holonomicMode": true,
   "pathFolders": [],
   "autoFolders": [],
   "defaultMaxVel": 4.42,
   "defaultMaxAccel": 3.0,
-  "defaultMaxAngVel": 540.0,
+  "defaultMaxAngVel": 360.0,
   "defaultMaxAngAccel": 720.0,
   "defaultNominalVoltage": 12.0,
   "robotMass": 60.088,
@@ -28,5 +28,10 @@
   "brModuleY": -0.273,
   "bumperOffsetX": 0.0,
   "bumperOffsetY": 0.0,
-  "robotFeatures": []
+  "robotFeatures": [
+    "{\"name\":\"Line\",\"type\":\"line\",\"data\":{\"start\":{\"x\":0.2,\"y\":0.2},\"end\":{\"x\":0.32,\"y\":0.2},\"strokeWidth\":0.02}}",
+    "{\"name\":\"Line\",\"type\":\"line\",\"data\":{\"start\":{\"x\":0.2,\"y\":-0.2},\"end\":{\"x\":0.32,\"y\":-0.2},\"strokeWidth\":0.02}}",
+    "{\"name\":\"Line\",\"type\":\"line\",\"data\":{\"start\":{\"x\":0.2,\"y\":0.205},\"end\":{\"x\":0.2,\"y\":-0.205},\"strokeWidth\":0.02}}",
+    "{\"name\":\"Circle\",\"type\":\"circle\",\"data\":{\"center\":{\"x\":-0.2,\"y\":0.0},\"radius\":0.1,\"strokeWidth\":0.01,\"filled\":false}}"
+  ]
 }

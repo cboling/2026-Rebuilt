@@ -19,6 +19,7 @@
 import logging
 import os
 import sys
+import time
 from typing import Optional
 
 import wpilib
@@ -26,12 +27,15 @@ from commands2 import CommandScheduler
 from commands2.command import Command
 from wpilib import Timer, RobotBase, DriverStation, Field2d, SmartDashboard
 
+from pathplannerlib.pathfinding import Pathfinding, LocalADStar
+
 import constants
 from constants import USE_PYKIT
 from robotcontainer import RobotContainer
 # from lib_6107.timedcommandloggedrobot import TimedCommandLoggedRobot
 # from util.telemetry import Telemetry
 from version import VERSION
+from lib_6107.util.statistics import RobotStatistics
 
 if USE_PYKIT:
     # pykit & AdvantageScope support
@@ -68,14 +72,13 @@ class MyRobot(MyRobotBase):
         self._counter = 0  # Updated on each periodic call. Can be used to logging/smartdashboard updates
 
         self._container: Optional[RobotContainer] = None
-        self.autonomousCommand: Optional[Command] = None
+        self._autonomous_command: Optional[Command] = None
+        self._time_and_joystick_replay = None
 
         self.disabledTimer: Timer = Timer()
-        self.autonomousCommand: Optional[Command] = None
 
-        self.holding_alge = False
-        self.autonomousCommand = None
         self.field: Optional[wpilib.Field2d] = None
+        self._stats: RobotStatistics = RobotStatistics()
 
         # Visualization and pose support
         self.match_started = False  # Set true on Autonomous or Teleop init
@@ -94,6 +97,8 @@ class MyRobot(MyRobotBase):
         This function is run when the robot is first started up and should be used for any
         initialization code.
         """
+        logger.info("robotInit: entry")
+
         # Set up logging
         if USE_PYKIT:
             Logger.recordMetadata("Robot", "Team6107-2026")
@@ -152,6 +157,11 @@ class MyRobot(MyRobotBase):
             version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
             logger.info(f"Python: {version}, Software Version: {VERSION}")
 
+        # Set up our pathfinding algorithm
+        # TODO: LocalADStar has a dynamic obstacle field.
+        #       Can we use that in future with vision?
+        Pathfinding.setPathfinder(LocalADStar())
+
         # Set up our playing field. May get overwritten if simulation is running or if we
         # support vision based odometry
         self.field = Field2d()
@@ -163,11 +173,20 @@ class MyRobot(MyRobotBase):
         self.disabledTimer = wpilib.Timer()
 
         # log and replay timestamp and joystick data
-        self._time_and_joystick_replay = (
-            HootAutoReplay()
-            .with_timestamp_replay()
-            .with_joystick_replay()
-        )
+        self._time_and_joystick_replay = HootAutoReplay().with_timestamp_replay().with_joystick_replay()
+
+        logger.info("robotInit: exit")
+
+    def endCompetition(self):  # real signature unknown; restored from __doc__
+        """
+        endCompetition(self: wpilib._wpilib.TimedRobot) -> None
+
+        Ends the main loop in StartCompetition().
+        """
+        print("========================================")
+        print("Robot Statistics:")
+        self._stats.print("all", 1)
+        print("========================================")
 
     def robotPeriodic(self) -> None:
         """
@@ -180,9 +199,11 @@ class MyRobot(MyRobotBase):
 
         Default period is 20 mS.
         """
+        start = time.monotonic()
         self._time_and_joystick_replay.update()
 
         self._counter += 1
+        self._stats.add("periodic", time.monotonic() - start)
 
     def disabledInit(self) -> None:
         """
@@ -191,6 +212,8 @@ class MyRobot(MyRobotBase):
         Users should override this method for initialization code which will be
         called each time the robot enters disabled mode.
         """
+        logger.info("disabledInit: entry")
+
         for subsystem in self.container.subsystems:
             if hasattr(subsystem, "stop") and callable(getattr(subsystem, "stop")):
                 subsystem.stop()
@@ -208,6 +231,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in disabled
         mode.
         """
+        start = time.monotonic()
         logger.debug("called disabledPeriodic")
 
         if self.disabledTimer.hasElapsed(constants.WHEEL_LOCK_TIME):
@@ -219,6 +243,8 @@ class MyRobot(MyRobotBase):
         if not self.match_started:
             self.container.check_alliance()
 
+        self._stats.add("disabled", time.monotonic() - start)
+
     def disabledExit(self) -> None:
         """
         Exit code for disabled mode should go here.
@@ -226,7 +252,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for code which will be called each time
         the robot exits disabled mode.
         """
-        logger.debug("*** disabledExit: entry")
+        logger.info("*** disabledExit: entry")
         self.disabledTimer.stop()
         self.disabledTimer.reset()
 
@@ -237,6 +263,8 @@ class MyRobot(MyRobotBase):
         Users should override this method for initialization code which will be
         called each time the robot enters autonomous mode.
         """
+        logger.info("autonomousInit: entry")
+
         self.container.set_start_time()
 
         # Stop what we are doing...
@@ -247,10 +275,10 @@ class MyRobot(MyRobotBase):
             self.container.check_alliance()
             self.match_started = True
 
-        self.autonomousCommand = self.container.getAutonomousCommand()
+        self._autonomous_command = self.container.get_autonomous_command()
 
-        if self.autonomousCommand:
-            self.autonomousCommand.schedule()
+        if self._autonomous_command:
+            self._autonomous_command.schedule()
 
     def autonomousPeriodic(self) -> None:
         """
@@ -260,7 +288,10 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in
         autonomous mode.
         """
-        logger.debug("*** called autonomousPeriodic")
+        start = time.monotonic()
+
+
+        self._stats.add("auto", time.monotonic() - start)
 
     def autonomousExit(self) -> None:
         """
@@ -269,10 +300,10 @@ class MyRobot(MyRobotBase):
         Users should override this method for code which will be called each time
         the robot exits autonomous mode.
         """
-        logger.info("*** autonomousExit: entry")
+        logger.info("autonomousExit: entry")
 
-        if self.autonomousCommand:
-            self.autonomousCommand.cancel()
+        if self._autonomous_command:
+            self._autonomous_command.cancel()
 
     def teleopInit(self) -> None:
         """
@@ -286,8 +317,8 @@ class MyRobot(MyRobotBase):
         self.container.set_start_time()
 
         # Stop what we are doing...
-        if self.autonomousCommand:
-            self.autonomousCommand.cancel()
+        if self._autonomous_command:
+            self._autonomous_command.cancel()
         else:
             CommandScheduler.getInstance().cancelAll()
 
@@ -304,8 +335,10 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in teleop
         mode.
         """
-        # Intake wheel control logic
-        logger.debug("*** called teleopPeriodic")
+        start = time.monotonic()
+        pass
+
+        self._stats.add("teleop", time.monotonic() - start)
 
     def teleopExit(self) -> None:
         """

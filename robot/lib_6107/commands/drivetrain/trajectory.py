@@ -266,7 +266,7 @@ class SwerveTrajectory(JerkyTrajectory):
 
         # Create config for trajectory
         config = TrajectoryConfig(
-            AutoConstants.MAX_SPEED_METERS_PER_SECOND * abs(self.speed),
+            MAX_SPEED * abs(self.speed),
             AutoConstants.MAX_ACCELERATION_METERS_PER_SECOND_SQUARED,
         )
         # Add kinematics to ensure max speed is actually obeyed

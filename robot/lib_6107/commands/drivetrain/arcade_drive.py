@@ -53,11 +53,11 @@ class ArcadeDrive(Command):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def _cmd(**kwargs) -> Command:
+        def command(**kwargs) -> ArcadeDrive:
             return ArcadeDrive(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("ArcadeDrive", _cmd)
+        NamedCommands.registerCommand("ArcadeDrive", command())
 
     def initialize(self):
         pass

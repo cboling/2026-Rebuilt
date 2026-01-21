@@ -44,7 +44,7 @@ class AimToDirectionConstants:
 
 class AimToDirection(Command):
     def __init__(self, drivetrain: DriveSubsystem,
-                 heading: Optional[Rotation2d | Callable[[], Rotation2d]],
+                 heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
                  speed: Optional[float] = 1.0,
                  fwd_speed: Optional[float] = 0.0):
         super().__init__()
@@ -59,11 +59,11 @@ class AimToDirection(Command):
         # setting the target angle in a way that works for all cases
         self._target_degrees = heading
 
-        if degrees is None:
+        if heading is None:
             self._target_degrees = lambda: self._drivetrain.heading.degrees()
 
-        elif not callable(degrees):
-            self._target_degrees = lambda: degrees
+        elif not callable(heading):
+            self._target_degrees = lambda: heading
 
     @staticmethod
     def pathplanner_register(drivetrain: DriveSubsystem) -> None:
@@ -71,11 +71,11 @@ class AimToDirection(Command):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def _cmd(**kwargs) -> Command:
+        def command(**kwargs) -> Command:
             return AimToDirection(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("AimToDirection", _cmd)
+        NamedCommands.registerCommand("AimToDirection", command())
 
     def initialize(self):
         self._target_direction = Rotation2d.fromDegrees(self._target_degrees())
