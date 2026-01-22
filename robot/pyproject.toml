@@ -26,10 +26,11 @@ dependencies = [
     "robotpy-pykit-watch>=1.0.0,
     "robotpy-halsim-gui>=2026.2.1",
     "robotpy>=2026.2.1",
-    "robotpy-cli>=2026.2.1",
+    "robotpy-cli>=2026.0.1",
     "robotpy-pathplannerlib>=2026.1.1",
     "phoenix6>=26.1.0",
     "robotpy-commands-v2>=2026.2.1",
+    "photonlibpy== 2026.1.1"
 ]
 # Use this configuration file to control what RobotPy packages are installed
 # on your RoboRIO
