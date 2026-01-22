@@ -32,29 +32,22 @@
     },
     {
       "anchor": {
-        "x": 3.1492617449664433,
-        "y": 4.849217002237136
+        "x": 3.2662134831460667,
+        "y": 4.81970786516854
       },
       "prevControl": {
-        "x": 2.462572706935123,
-        "y": 5.1729418344519
+        "x": 2.5795244451147465,
+        "y": 5.143432697383304
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "POS-1-SHOT-POINT"
     }
   ],
   "rotationTargets": [],
   "constraintZones": [],
   "pointTowardsZones": [],
-  "eventMarkers": [
-    {
-      "name": "AimAndShoot",
-      "waypointRelativePos": 2.0,
-      "endWaypointRelativePos": null,
-      "command": null
-    }
-  ],
+  "eventMarkers": [],
   "globalConstraints": {
     "maxVelocity": 4.42,
     "maxAcceleration": 3.0,
@@ -65,7 +58,7 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -35.09581678702619
+    "rotation": -36.384351815835885
   },
   "reversed": false,
   "folder": null,

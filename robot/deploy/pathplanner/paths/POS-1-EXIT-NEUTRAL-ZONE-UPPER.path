@@ -16,15 +16,15 @@
     },
     {
       "anchor": {
-        "x": 3.384697986577182,
+        "x": 3.235640449438202,
         "y": 5.967539149888143
       },
       "prevControl": {
-        "x": 2.384697986577182,
-        "y": 5.967539149888143
+        "x": 2.8076179775280896,
+        "y": 5.9611011235955065
       },
       "nextControl": null,
-      "isLocked": true,
+      "isLocked": false,
       "linkedName": "POS-1-UPPER-EXIT-END"
     }
   ],
@@ -42,7 +42,7 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -178.9949139947458
+    "rotation": -178.99491399474581
   },
   "reversed": false,
   "folder": null,

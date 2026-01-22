@@ -11,9 +11,16 @@
           }
         },
         {
-          "type": "wait",
+          "type": "sequential",
           "data": {
-            "waitTime": 1.0
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "AimAndShoot"
+                }
+              }
+            ]
           }
         },
         {
@@ -29,21 +36,9 @@
           }
         },
         {
-          "type": "wait",
-          "data": {
-            "waitTime": 1.0
-          }
-        },
-        {
           "type": "path",
           "data": {
             "pathName": "POS-1-REFUEL-UPPER-ONLY"
-          }
-        },
-        {
-          "type": "wait",
-          "data": {
-            "waitTime": 10.0
           }
         },
         {
@@ -59,9 +54,35 @@
           }
         },
         {
+          "type": "sequential",
+          "data": {
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "AimAndShoot"
+                }
+              }
+            ]
+          }
+        },
+        {
           "type": "path",
           "data": {
             "pathName": "POS-1-CLIMB-RUNG"
+          }
+        },
+        {
+          "type": "sequential",
+          "data": {
+            "commands": [
+              {
+                "type": "named",
+                "data": {
+                  "name": "POS-1 Clime One"
+                }
+              }
+            ]
           }
         }
       ]

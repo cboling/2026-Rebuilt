@@ -3,28 +3,28 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.384697986577182,
+        "x": 3.235640449438202,
         "y": 5.967539149888143
       },
       "prevControl": null,
       "nextControl": {
-        "x": 3.7069309719258685,
+        "x": 3.5578734347868886,
         "y": 5.775688996642925
       },
-      "isLocked": false,
+      "isLocked": true,
       "linkedName": "POS-1-UPPER-EXIT-END"
     },
     {
       "anchor": {
-        "x": 3.4239373601789715,
-        "y": 4.672639821029082
+        "x": 3.2662134831460667,
+        "y": 4.81970786516854
       },
       "prevControl": {
-        "x": 2.5838785616170674,
-        "y": 5.639407827346004
+        "x": 2.4261546845841626,
+        "y": 5.786475871485462
       },
       "nextControl": null,
-      "isLocked": false,
+      "isLocked": true,
       "linkedName": "POS-1-SHOT-POINT"
     }
   ],
@@ -48,7 +48,7 @@
   "folder": null,
   "idealStartingState": {
     "velocity": 0,
-    "rotation": -178.9949139947458
+    "rotation": -178.99491399474581
   },
   "useDefaultConstraints": true
 }

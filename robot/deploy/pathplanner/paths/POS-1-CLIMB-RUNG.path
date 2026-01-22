@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.4239373601789715,
-        "y": 4.672639821029082
+        "x": 3.2662134831460667,
+        "y": 4.81970786516854
       },
       "prevControl": null,
       "nextControl": {
-        "x": 3.6506873601789716,
-        "y": 4.526349498448438
+        "x": 3.4929634831460667,
+        "y": 4.673417542587895
       },
       "isLocked": false,
       "linkedName": "POS-1-SHOT-POINT"
@@ -63,14 +63,7 @@
   "rotationTargets": [],
   "constraintZones": [],
   "pointTowardsZones": [],
-  "eventMarkers": [
-    {
-      "name": "POS-1 Clime One",
-      "waypointRelativePos": 0,
-      "endWaypointRelativePos": null,
-      "command": null
-    }
-  ],
+  "eventMarkers": [],
   "globalConstraints": {
     "maxVelocity": 4.42,
     "maxAcceleration": 3.0,
