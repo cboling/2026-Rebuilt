@@ -26,10 +26,10 @@ from typing import Callable, Optional
 from commands2 import Command
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
-from wpimath.units import degrees
 
 from subsystems.swervedrive.constants import AutoConstants
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from lib_6107.commands.command import BaseCommand
 
 from pathplannerlib.auto import NamedCommands
 
@@ -42,15 +42,15 @@ class AimToDirectionConstants:
     ANGLE_VELOCITY_TOLERANCE_DEGREES_PER_SEC = 1  # velocity under 100 degrees/second is considered "stopped"
 
 
-class AimToDirection(Command):
+class AimToDirection(BaseCommand):
+
+    name = "AimToDirection"  # change this to something appropriate for this command
+
     def __init__(self, drivetrain: DriveSubsystem,
                  heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
                  speed: Optional[float] = 1.0,
                  fwd_speed: Optional[float] = 0.0):
-        super().__init__()
-
-        self._drivetrain: DriveSubsystem = drivetrain
-        self.addRequirements(drivetrain)
+        super().__init__(drivetrain)
 
         self._speed = min((1.0, abs(speed)))
         self._target_direction = None
@@ -75,11 +75,12 @@ class AimToDirection(Command):
             return AimToDirection(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("AimToDirection", command())
+        NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self):
+        super().initialize()
+
         self._target_direction = Rotation2d.fromDegrees(self._target_degrees())
-        SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
 
     def execute(self):
         # 1. how many degrees are left to turn?
@@ -116,8 +117,7 @@ class AimToDirection(Command):
     def end(self, interrupted: bool):
         self._drivetrain.stop()
 
-        if interrupted:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
+        super().end(interrupted)
 
     def isFinished(self) -> bool:
         if self._fwd_speed != 0:
@@ -130,10 +130,10 @@ class AimToDirection(Command):
         # if we are pretty close to the direction we wanted, consider the command finished
         if abs(degrees_remaining) < AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES:
             turn_velocity = self._drivetrain.gyro.turn_rate_degrees_per_second
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "good angle")
+            SmartDashboard.putString(f"{self.getName()}", "good angle")
 
             if abs(turn_velocity) < AimToDirectionConstants.ANGLE_VELOCITY_TOLERANCE_DEGREES_PER_SEC:
-                SmartDashboard.putString("command/c" + self.__class__.__name__, "completed")
+                SmartDashboard.putString(f"{self.getName()}", "completed")
                 return True
 
         return False

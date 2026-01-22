@@ -36,6 +36,7 @@ from pathplannerlib.auto import NamedCommands
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 from constants import MAX_SPEED
+from lib_6107.commands.command import BaseCommand
 
 
 class GoToPointConstants:
@@ -47,7 +48,7 @@ class GoToPointConstants:
     OVERSTEER_ADJUSTMENT = 0.5
 
 
-class GoToPoint(Command):
+class GoToPoint(BaseCommand):
     def __init__(self, drivetrain: DriveSubsystem,
                  x: Optional[int | float] = 0,
                  y: Optional[int | float] = 0,
@@ -63,7 +64,7 @@ class GoToPoint(Command):
         :param finish_direction: Rotation2d for robot direction at the finish point, example: Rotation2d.fromDegrees(-70)
         :param slow_down_at_finish:
         """
-        super().__init__()
+        super().__init__(drivetrain)
 
         self._target_position = Translation2d(x, y)
         self._initial_position = None
@@ -72,8 +73,6 @@ class GoToPoint(Command):
         self._desired_end_direction = None
         self._initial_distance = None
         self._pointing_in_good_direction = False
-        self._drivetrain = drivetrain
-        self.addRequirements(drivetrain)
 
         self._finish_direction = finish_direction
 
@@ -90,9 +89,11 @@ class GoToPoint(Command):
             return GoToPoint(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("GoToPoint", command())
+        NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self):
+        super().initialize()
+
         self._initial_position = self._drivetrain.pose.translation()
 
         if self._finish_direction is not None:
@@ -106,8 +107,6 @@ class GoToPoint(Command):
 
         self._initial_distance = self._initial_position.distance(self._target_position)
         self._pointing_in_good_direction = False
-
-        SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
 
     def execute(self):
         # 1. to which direction we should be pointing?
@@ -133,7 +132,7 @@ class GoToPoint(Command):
             return
 
         if not self._pointing_in_good_direction:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "in good direction")
+            SmartDashboard.putString(f"command/{self.getName()}", "in good direction")
             self._pointing_in_good_direction = True
 
         # 3. otherwise, drive forward but with an oversteer adjustment
@@ -194,9 +193,7 @@ class GoToPoint(Command):
 
     def end(self, interrupted: bool):
         self._drivetrain.stop()
-
-        if interrupted:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
+        super().end(interrupted)
 
     def isFinished(self) -> bool:
         # 1. did we reach the point where we must move very slow?
@@ -205,7 +202,7 @@ class GoToPoint(Command):
         distance_from_initial_position = self._initial_position.distance(current_position)
 
         if not self._stop and distance_from_initial_position > self._initial_distance - GoToPointConstants.APPROACH_RADIUS:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "close enough")
+            SmartDashboard.putString(f"command/{self.getName()}", "close enough")
             return True  # close enough
 
         distance_remaining = self._target_position.distance(current_position)
@@ -219,11 +216,11 @@ class GoToPoint(Command):
 
         # 2. did we overshoot?
         if distance_from_initial_position >= self._initial_distance:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "overshot")
+            SmartDashboard.putString(f"command/{self.getName()}", "overshot")
             return True  # we overshot or driving too slow
 
         if too_slow_now:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "slow enough")
+            SmartDashboard.putString(f"command/{self.getName()}", "slow enough")
             return True
 
         return False

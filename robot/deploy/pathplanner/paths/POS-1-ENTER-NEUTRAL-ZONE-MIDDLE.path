@@ -3,45 +3,45 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.7996011396011395,
-        "y": 7.277977207977208
+        "x": 3.435104838709678,
+        "y": 5.571048387096774
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.8076344784515594,
-        "y": 7.096901932637063
+        "x": 4.43510483870967,
+        "y": 5.571048387096774
       },
       "isLocked": true,
-      "linkedName": null
+      "linkedName": "POS-1-MIDDLE-ENTER-START"
     },
     {
       "anchor": {
-        "x": 1.7582051282051285,
-        "y": 6.347720797720798
+        "x": 4.459137096774194,
+        "y": 5.592991935483871
       },
       "prevControl": {
-        "x": 1.8964288072003952,
-        "y": 6.981001379886636
+        "x": 4.119012096774197,
+        "y": 5.592991935483871
       },
       "nextControl": {
-        "x": 1.6114598987916153,
-        "y": 5.675398189984162
+        "x": 4.9894899586688,
+        "y": 5.592991935483871
       },
       "isLocked": true,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 3.0243874643874644,
-        "y": 5.042777777777778
+        "x": 5.724548387096775,
+        "y": 5.585677419354839
       },
       "prevControl": {
-        "x": 2.306840073940406,
-        "y": 5.363382881218362
+        "x": 4.751746522629991,
+        "y": 5.585677419354839
       },
       "nextControl": null,
       "isLocked": true,
-      "linkedName": null
+      "linkedName": "POS-1-MIDDLE-ENTER-END"
     }
   ],
   "rotationTargets": [],
@@ -49,10 +49,15 @@
   "pointTowardsZones": [],
   "eventMarkers": [
     {
-      "name": "AimAndShoot",
-      "waypointRelativePos": 2.0,
-      "endWaypointRelativePos": null,
-      "command": null
+      "name": "Collect Fuel",
+      "waypointRelativePos": 0.8413284132841333,
+      "endWaypointRelativePos": 1.9581795817958176,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "IntakeCollectFuel"
+        }
+      }
     }
   ],
   "globalConstraints": {
@@ -64,14 +69,14 @@
     "unlimited": false
   },
   "goalEndState": {
-    "velocity": 0,
-    "rotation": -35.0
+    "velocity": 2.0,
+    "rotation": 0.0
   },
   "reversed": false,
   "folder": null,
   "idealStartingState": {
-    "velocity": 0,
-    "rotation": -170.0
+    "velocity": 2.0,
+    "rotation": 0.0
   },
   "useDefaultConstraints": true
 }

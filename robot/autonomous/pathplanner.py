@@ -37,6 +37,7 @@ from pykit.logger import Logger
 
 from constants import USE_PYKIT
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from commands.intake.intake_commands import IntakeCollectFuel
 
 from lib_6107.commands.drivetrain.arcade_drive import ArcadeDrive
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
@@ -47,15 +48,14 @@ from lib_6107.commands.drivetrain.swervetopoint import SwerveToPoint, SwerveMove
 logger = logging.getLogger(__name__)
 
 
-def configure_auto_builder(drivetrain: DriveSubsystem,
+def configure_auto_builder(drivetrain: DriveSubsystem, container: 'RobotContainer',
                            default_command: Optional[str] = "") -> SendableChooser:
 
     # Register named commands first
-    register_commands_and_triggers(drivetrain)
+    register_commands_and_triggers(drivetrain, container)
 
     # Does pathplanner exist yet?
     file_path = os.path.join(getDeployDirectory(), 'pathplanner', 'settings.json')
-    path_planner_configured = False
 
     if os.path.isfile(file_path) and os.access(file_path, os.R_OK):
         config = RobotConfig.fromGUISettings()
@@ -83,7 +83,6 @@ def configure_auto_builder(drivetrain: DriveSubsystem,
             lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
             drivetrain  # Subsystem for requirements
         )
-        path_planner_configured = True
         if USE_PYKIT:
         # PathPlanner and AdvantageScope integration
             PathPlannerLogging.setLogActivePathCallback(lambda path: Logger.recordOutput("Odometry/Trajectory",
@@ -106,26 +105,37 @@ def configure_auto_builder(drivetrain: DriveSubsystem,
 
     return None
 
-def register_commands_and_triggers(drivetrain: DriveSubsystem) -> None:
-    # Register Named Commands
+def register_commands_and_triggers(drivetrain: DriveSubsystem, container: 'RobotContainer') -> None:
+    # Register Named Commands.
+    #
+    #   Format is  <command-object-name>, <first-required-parameter>
     commands = [
-        ArcadeDrive,
-        AimToDirection,
-        GoToPoint,
-        SwerveToPoint,
-        SwerveMove,
+        # DriveTrian
+       (ArcadeDrive,       drivetrain),
+       (AimToDirection,    drivetrain),
+       (GoToPoint,         drivetrain),
+       (SwerveToPoint,     drivetrain),
+       (SwerveMove,        drivetrain),
+
+        # Intake
+       (IntakeCollectFuel, container),
+
+        # Shooter and associated Feeder
+
+        # Climber
+
+        # Entertainment
     ]
-    for item in commands:
-        item.pathplanner_register(drivetrain)
+    for obj, param in commands:
+        obj.pathplanner_register(param)
 
     # And a few special ones
     if drivetrain.front_camera is not None:
         ApproachTag.pathplanner_register(drivetrain)
 
-    # Now all the triggers. This is where we can added custom commands that take
-    # arguments.
+    # Now all the triggers. This is where we can add custom commands that take arguments.
 
-    EventTrigger("Collect Fuel").whileTrue(cmd.PrintCommand("running intake"))
+    EventTrigger("Collect Fuel").whileTrue(cmd.PrintCommand("running intake")) # IntakeAutoCommand(container)
 
     # Current, AimAndShoot just spins a 1/2 180 degrees per second for 2 seconds
     EventTrigger("AimAndShoot").whileTrue(ArcadeDrive(drivetrain,

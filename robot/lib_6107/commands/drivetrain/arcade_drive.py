@@ -18,14 +18,15 @@
 
 from typing import Optional
 
-from commands2 import Command
 from wpimath.units import meters_per_second, radians_per_second
 
 from pathplannerlib.auto import NamedCommands
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from lib_6107.commands.command import BaseCommand
 
 
-class ArcadeDrive(Command):
+class ArcadeDrive(BaseCommand):
+
     def __init__(self, drivetrain: DriveSubsystem,
                  drive_speed: Optional[meters_per_second] = 0.0,
                  rotation_speed: Optional[radians_per_second] = 0.0,
@@ -33,7 +34,7 @@ class ArcadeDrive(Command):
         """
         Drive the robot at `drive_speed` and `rotation_speed` until this command is terminated.
         """
-        super().__init__()
+        super().__init__(drivetrain)
 
         self._drive_speed = drive_speed
         if not callable(drive_speed):
@@ -43,9 +44,8 @@ class ArcadeDrive(Command):
         if not callable(rotation_speed):
             self._rotation_speed = lambda: rotation_speed
 
+        self._start_time: float = 0
         self._assume_manual_input = assume_manual_input
-        self._drivetrain = drivetrain
-        self.addRequirements(drivetrain)
 
     @staticmethod
     def pathplanner_register(drivetrain: DriveSubsystem) -> None:
@@ -57,10 +57,10 @@ class ArcadeDrive(Command):
             return ArcadeDrive(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("ArcadeDrive", command())
+        NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self):
-        pass
+        super().initialize()
 
     def isFinished(self) -> bool:
         return False  # never finishes, you should use it with "withTimeout(...)"
@@ -75,3 +75,4 @@ class ArcadeDrive(Command):
 
     def end(self, interrupted: bool):
         self._drivetrain.stop()  # stop at the end
+        super().end(interrupted)

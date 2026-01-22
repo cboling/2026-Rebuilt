@@ -33,19 +33,21 @@ from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 
 from pathplannerlib.auto import NamedCommands
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from lib_6107.commands.command import BaseCommand
 
 
-class SwerveToPoint(Command):
+class SwerveToPoint(BaseCommand):
+
     def __init__(self,
-                 drivetrain: DriveSubsystem,
+                 drivetrain: 'DriveSubsystem',
                  x:  Optional[int | float] = 0,
                  y:  Optional[int | float] = 0,
                  heading: Optional[Rotation2d | degrees] = 0.0,
                  speed: Optional[float] = 1.0,
                  slow_down_at_finish: Optional[bool] = True,
                  rate_limit: Optional[bool] = False) -> None:
-        super().__init__()
+        super().__init__(drivetrain)
+
         self._target_pose = None
         self._target_point = Translation2d(x, y)
         heading = heading or Rotation2d(0)
@@ -61,15 +63,13 @@ class SwerveToPoint(Command):
         self._speed = speed
         self._stop = slow_down_at_finish
         self._rate_limit = rate_limit
-        self._drivetrain = drivetrain
-        self.addRequirements(drivetrain)
 
         self._initial_position = None
         self._initial_distance = None
         self._overshot = False
 
     @staticmethod
-    def pathplanner_register(drivetrain: DriveSubsystem) -> None:
+    def pathplanner_register(drivetrain: 'DriveSubsystem') -> None:
         """
         This command factory can be used with register this command
         and make it available from within PathPlanner
@@ -78,9 +78,11 @@ class SwerveToPoint(Command):
             return SwerveToPoint(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("SwerveToPoint", command())
+        NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self):
+        super().initialize()
+
         initial_pose = self._drivetrain.pose
         self._initial_position = initial_pose.translation()
 
@@ -89,8 +91,6 @@ class SwerveToPoint(Command):
 
         self._initial_distance = self._initial_position.distance(self._target_pose.translation())
         self._overshot = False
-
-        SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
 
     def execute(self):
         current_xy = self._drivetrain.pose
@@ -136,8 +136,7 @@ class SwerveToPoint(Command):
 
     def end(self, interrupted: bool):
         self._drivetrain.stop()
-        if interrupted:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
+        super().end(interrupted)
 
     def isFinished(self) -> bool:
         current_pose = self._drivetrain.pose
@@ -147,12 +146,12 @@ class SwerveToPoint(Command):
         distance_from_initial_position = self._initial_position.distance(current_position)
 
         if not self._stop and distance_from_initial_position > self._initial_distance - GoToPointConstants.APPROACH_RADIUS:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "acceptable")
+            SmartDashboard.putString(f"command/{self.getName()}", "acceptable")
             return True  # close enough
 
         if distance_from_initial_position > self._initial_distance:
             if not self._overshot:
-                SmartDashboard.putString("command/c" + self.__class__.__name__, "overshooting")
+                SmartDashboard.putString(f"command/{self.getName()}", "overshooting")
 
             self._overshot = True
 
@@ -160,7 +159,7 @@ class SwerveToPoint(Command):
             distance_from_target_direction_degrees = self.get_degrees_left_to_turn()
 
             if abs(distance_from_target_direction_degrees) < 3 * AimToDirectionConstants.ANGLE_TOLERANCE_DEGREES:
-                SmartDashboard.putString("command/c" + self.__class__.__name__, "completed")
+                SmartDashboard.putString(f"command/{self.getName()}", "completed")
                 return True  # case 2: overshot in distance and target direction is correct
 
         return False
@@ -182,19 +181,17 @@ class SwerveToPoint(Command):
         return degrees_left_to_turn
 
 
-class SwerveMove(Command):
+class SwerveMove(BaseCommand):
     def __init__(
             self,
-            drivetrain: DriveSubsystem,
+            drivetrain: 'DriveSubsystem',
             meters_to_the_left: Optional[meters] = 0.0,
             meters_backwards: Optional[meters] = 0.0,
             speed: Optional[float] = 1.0,
             heading: Optional[Rotation2d, Callable[[], Rotation2d]] = None,
             slow_down_at_finish: Optional[bool] = True) -> None:
 
-        super().__init__()
-        self._drivetrain = drivetrain
-        self.addRequirements(drivetrain)
+        super().__init__(drivetrain)
 
         self._speed = speed
         self._meters_to_the_left = meters_to_the_left
@@ -208,7 +205,7 @@ class SwerveMove(Command):
         self._subcommand = None
 
     @staticmethod
-    def pathplanner_register(drivetrain: DriveSubsystem) -> None:
+    def pathplanner_register(drivetrain: 'DriveSubsystem') -> None:
         """
         This command factory can be used with register this command
         and make it available from within PathPlanner
@@ -217,9 +214,11 @@ class SwerveMove(Command):
             return SwerveMove(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("SwerveMove", command())
+        NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self):
+        super().initialize()
+
         position = self._drivetrain.pose
         heading = self._desired_heading() if self._desired_heading is not None else position.rotation()
 
@@ -241,3 +240,5 @@ class SwerveMove(Command):
 
     def end(self, interrupted: bool):
         self._subcommand.end(interrupted)
+        super().end(interrupted)
+

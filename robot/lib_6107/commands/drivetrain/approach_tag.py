@@ -16,6 +16,7 @@ from wpimath.units import seconds, meters, percent
 
 from pathplannerlib.auto import NamedCommands
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from lib_6107.commands.command import BaseCommand
 
 class Tunable:
     _choosers = {}
@@ -61,8 +62,7 @@ class Tunable:
         return self.value
 
 
-class ApproachTag(Command):
-
+class ApproachTag(BaseCommand):
     def __init__(self, drivetrain: DriveSubsystem,
                  camera: Optional[Any] = None,
                  specific_heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
@@ -86,17 +86,16 @@ class ApproachTag(Command):
         :param detection_timeout: if no detection within this many seconds, assume the tag is lost
         :param camera_minimum_fps: what is the minimal number of **detected** frames per second expected from this camera
         """
-        super().__init__()
+        super().__init__(drivetrain)
         assert hasattr(camera, "getX"), "camera must have `getX()` to give us the object coordinate (in degrees)"
         assert hasattr(camera, "getA"), "camera must have `getA()` to give us object size (in % of screen)"
         assert hasattr(camera, "getSecondsSinceLastHeartbeat"), "camera must have a `getSecondsSinceLastHeartbeat()`"
         assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
-        self._drivetrain = drivetrain
         self._camera = camera or drivetrain.front_camera
-        self.addRequirements(drivetrain)
         self.addRequirements(camera)
 
+        self._start_time: float = 0
         self._reverse = reverse
         self._approach_speed = min((1.0, abs(speed)))  # ensure that the speed is between 0.0 and 1.0
         self._final_approach_object_size = final_approach_obj_size
@@ -158,7 +157,7 @@ class ApproachTag(Command):
             return ApproachTag(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand("ArcadeDrive", command())
+        NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def isReady(self, min_required_object_size=0.3):
         return self._camera.hasDetection() and self._camera.getA() > min_required_object_size
@@ -190,11 +189,13 @@ class ApproachTag(Command):
             self.tunables.append(self._push_forward_seconds)
 
     def initialize(self):
+        super().initialize()
+
         for t in self.tunables:
             t.fetch()
 
         kp_mult_tran = self.KPMULT_TRANSLATION.value
-        print(f"ApproachTag: translation gain value {kp_mult_tran}, power={self.APPROACH_SHAPE.value}")
+        # print(f"ApproachTag: translation gain value {kp_mult_tran}, power={self.APPROACH_SHAPE.value}")
 
         target_degrees = self._target_degrees()
         if target_degrees is None:
@@ -225,8 +226,6 @@ class ApproachTag(Command):
         self._last_state = -1
         self._last_warnings = None
 
-        SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
-
     def isFinished(self) -> bool:
         if self._finished:
             return True
@@ -255,11 +254,7 @@ class ApproachTag(Command):
 
     def end(self, interrupted: bool):
         self._drivetrain.stop()
-        if interrupted:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "interrupted")
-        else:
-            elapsed = Timer.getFPGATimestamp() - self._start_time
-            SmartDashboard.putString("command/c" + self.__class__.__name__, f"{int(1000 * elapsed)}ms: {self._finished}")
+        super().end(interrupted)
 
     def execute(self):
         now = Timer.getFPGATimestamp()
@@ -339,7 +334,7 @@ class ApproachTag(Command):
         state = self.get_state()
 
         if state != self._last_state or warnings != self._last_warnings:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, warnings or self.STATE_NAMES[state])
+            SmartDashboard.putString(f"command/{self.getName()}", warnings or self.STATE_NAMES[state])
 
         self._last_state = state
         self._last_warnings = warnings
@@ -406,7 +401,7 @@ class ApproachTag(Command):
 
         # have we reached the final approach point now? (must already be on glide path, otherwise it doesn't count)
         if self._reached_glide_path_time != 0 and self._reached_final_approach_time == 0 and robot_x > 0:
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "reached final approach")
+            SmartDashboard.putString(f"command/{self.getName()}", "reached final approach")
             self._reached_final_approach_time = now
             self._reached_final_approach_xy = self._drivetrain.pose.translation()
             print(f"final approach starting from {self._reached_final_approach_xy}")
@@ -419,7 +414,7 @@ class ApproachTag(Command):
             direction = Translation2d(x=0.0 - robot_x, y=0.0 - robot_y)  # otherwise go towards 0, 0
 
         if not (direction.x != 0 or direction.y != 0):
-            SmartDashboard.putString("command/c" + self.__class__.__name__, "warning: distance not positive")
+            SmartDashboard.putString(f"command/{self.getName()}", "warning: distance not positive")
             return None
 
         return direction
@@ -625,7 +620,7 @@ class ApproachManually(Command):
         self.lostTag = ""
         self.finished = ""
 
-        SmartDashboard.putString("command/c" + self.__class__.__name__, "running")
+        SmartDashboard.putString(f"command/{self.getName()}", "running")
 
     def isFinished(self) -> bool:
         return False  # never

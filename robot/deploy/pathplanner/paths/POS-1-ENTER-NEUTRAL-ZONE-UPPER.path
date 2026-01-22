@@ -1,0 +1,82 @@
+{
+  "version": "2025.0",
+  "waypoints": [
+    {
+      "anchor": {
+        "x": 3.486306451612904,
+        "y": 5.995290322580645
+      },
+      "prevControl": null,
+      "nextControl": {
+        "x": 4.486306451612894,
+        "y": 5.995290322580645
+      },
+      "isLocked": true,
+      "linkedName": "POS-1-UPPER-ENTER-START"
+    },
+    {
+      "anchor": {
+        "x": 4.4774233870967715,
+        "y": 5.9879758064516135
+      },
+      "prevControl": {
+        "x": 4.1372983870967746,
+        "y": 5.9879758064516135
+      },
+      "nextControl": {
+        "x": 5.0077762489913775,
+        "y": 5.9879758064516135
+      },
+      "isLocked": true,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 5.636774193548388,
+        "y": 5.973346774193549
+      },
+      "prevControl": {
+        "x": 4.664001108924649,
+        "y": 5.980829644075271
+      },
+      "nextControl": null,
+      "isLocked": true,
+      "linkedName": "POS-1-UPPER-ENTER-END"
+    }
+  ],
+  "rotationTargets": [],
+  "constraintZones": [],
+  "pointTowardsZones": [],
+  "eventMarkers": [
+    {
+      "name": "Collect Fuel",
+      "waypointRelativePos": 0.8413284132841333,
+      "endWaypointRelativePos": 1.9581795817958176,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "IntakeCollectFuel"
+        }
+      }
+    }
+  ],
+  "globalConstraints": {
+    "maxVelocity": 4.42,
+    "maxAcceleration": 3.0,
+    "maxAngularVelocity": 360.0,
+    "maxAngularAcceleration": 720.0,
+    "nominalVoltage": 12.0,
+    "unlimited": false
+  },
+  "goalEndState": {
+    "velocity": 2.0,
+    "rotation": 0.0
+  },
+  "reversed": false,
+  "folder": null,
+  "idealStartingState": {
+    "velocity": 2.0,
+    "rotation": 0.0
+  },
+  "useDefaultConstraints": true
+}

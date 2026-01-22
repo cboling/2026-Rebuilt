@@ -14,31 +14,25 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
-#
-#  This file originated from aesatchien's FRC2429_2025 project on github:
-#       https://github.com/aesatchien/FRC2429_2025
-#
-#  It provides a starting place to define a Command. Just copy it to a new
-#  filename and change the class name and implementation to suite what you
-#  may need in your project.
-#
 
-import logging
 from typing import Optional
 
-from commands2 import Command
-from lib_6107.commands.command import BaseCommand
+from commands2 import Command, Subsystem
+from wpimath.units import revolutions_per_minute
 
 from pathplannerlib.auto import NamedCommands
+from lib_6107.commands.command import BaseCommand
 
-class CommandTemplate(BaseCommand):  # change the name for your command
+class IntakeCollectFuel(BaseCommand):  # change the name for your command
     """
-    TODO: Describe this class here
+    Activates the intake to collect fuel and deactivates it on end. The
+    'speed' parameter provides the voltage rate for the intake.
     """
-    def __init__(self, container: 'RobotContainer',  **_kwargs):
+    def __init__(self, container, rpm: Optional[revolutions_per_minute] = 500):
         super().__init__(container)
 
-        raise NotImplementedError("Remember to remove this line as well")
+        self._rpm: revolutions_per_minute = rpm
+        self._intake: Subsystem = None                   # TODO: Define this once we have it
 
     @staticmethod
     def pathplanner_register(container: 'RobotContainer') -> None:
@@ -47,19 +41,18 @@ class CommandTemplate(BaseCommand):  # change the name for your command
         and make it available from within PathPlanner
         """
         def command(**kwargs) -> Command:
-            return CommandTemplate(container, **kwargs)      # TODO: Rename this too
+            return IntakeCollectFuel(container, **kwargs)
 
         # Register the function itself
         NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self) -> None:
         """
-        Called just before this Command runs the first time
+        The initial subroutine of a command. Called once when the command is initially scheduled.
         """
         super().initialize()
 
-        pass
-
+        # TODO: Start the intake
 
     def execute(self) -> None:
         """
@@ -85,6 +78,6 @@ class CommandTemplate(BaseCommand):  # change the name for your command
 
         :param interrupted: whether the command was interrupted/canceled
         """
-        pass
+        # TODO: Stop the intake
 
         super().end(interrupted)

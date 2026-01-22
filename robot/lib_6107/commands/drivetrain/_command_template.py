@@ -15,51 +15,44 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 #
-#  This file originated from aesatchien's FRC2429_2025 project on github:
-#       https://github.com/aesatchien/FRC2429_2025
+#  Drivetrain specific Command template
 #
-#  It provides a starting place to define a Command. Just copy it to a new
-#  filename and change the class name and implementation to suite what you
-#  may need in your project.
-#
-
 import logging
 from typing import Optional
 
 from commands2 import Command
-from lib_6107.commands.command import BaseCommand
 
 from pathplannerlib.auto import NamedCommands
+from lib_6107.commands.command import BaseCommand
 
-class CommandTemplate(BaseCommand):  # change the name for your command
+class DriveTrainCommandTemplate(BaseCommand):  # change the name for your command
     """
     TODO: Describe this class here
     """
-    def __init__(self, container: 'RobotContainer',  **_kwargs):
-        super().__init__(container)
+    def __init__(self, drivetrain: 'DriveSubsystem',  **_kwargs):
+        super().__init__(drivetrain)
 
         raise NotImplementedError("Remember to remove this line as well")
 
     @staticmethod
-    def pathplanner_register(container: 'RobotContainer') -> None:
+    def pathplanner_register(drivetrain: 'DriveSubsystem') -> None:
         """
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
         def command(**kwargs) -> Command:
-            return CommandTemplate(container, **kwargs)      # TODO: Rename this too
+            return DriveTrainCommandTemplate(drivetrain, **kwargs)      # TODO: Rename this too
 
         # Register the function itself
         NamedCommands.registerCommand(BaseCommand.getClassName(), command())
 
     def initialize(self) -> None:
         """
-        Called just before this Command runs the first time
+        The initial subroutine of a command. Called once when the command is initially scheduled.
         """
         super().initialize()
 
         pass
-
 
     def execute(self) -> None:
         """

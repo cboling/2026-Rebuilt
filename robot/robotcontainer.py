@@ -144,7 +144,7 @@ class RobotContainer:
         self.robot_drive = TunerConstants.create_drivetrain(self, **drive_kwargs)
 
         # Init the Auto chooser.  PathPlanner init will fill in our choices
-        self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, "")
+        self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, self,"")
 
         if FRONT_CAMERA_TYPE == CAMERA_TYPE_LIMELIGHT:
             # TODO: Make pose and heading below as constants
@@ -441,10 +441,10 @@ class RobotContainer:
 
         TODO:  THIS IS JUST A TEST.  USE PATHPLANNER FOR ALL AUTONOMOUS MODE PATHS
         """
-        self._auto_chooser.setDefaultOption("Do nothing", self.get_do_nothing)
-        self._auto_chooser.addOption("trajectory example", self.get_autonomous_trajectory_example)
-        self._auto_chooser.addOption("left blue", self.get_autonomous_left_blue)
-        self._auto_chooser.addOption("left red", self.get_autonomous_left_red)
+        self._auto_chooser.setDefaultOption("Do nothing", self.get_do_nothing())
+        self._auto_chooser.addOption("trajectory example", self.get_autonomous_trajectory_example())
+        self._auto_chooser.addOption("left blue", self.get_autonomous_left_blue())
+        self._auto_chooser.addOption("left red", self.get_autonomous_left_red())
 
         # If vision based odometry is supported, add in their auto commands
         if self.vision_odometry:

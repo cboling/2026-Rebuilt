@@ -18,12 +18,12 @@
 
 from typing import Optional
 
-from commands2 import Command
-
 from wpimath.geometry import Rotation2d, Pose2d, Translation2d
 from wpimath.units import degrees
+from lib_6107.commands.command import BaseCommand
 
-class ResetXY(Command):
+class ResetXY(BaseCommand):
+
     def __init__(self, drivetrain: 'DriveSubsystem',
                  x: Optional[float | int] = 0,
                  y: Optional[float | int] = 0,
@@ -35,13 +35,14 @@ class ResetXY(Command):
         :param heading: heading (for example: 0 = "North" of the field, 180 = "South" of the field)
         :param drivetrain: drivetrain on which the (X, Y, heading) should be set
         """
-        super().__init__()
-        self.drivetrain = drivetrain
+        super().__init__(drivetrain)
+
         self.position = Pose2d(Translation2d(x, y), Rotation2d.fromDegrees(heading))
-        self.addRequirements(drivetrain)
 
     def initialize(self):
-        self.drivetrain.pose = self.position
+        super().initialize()
+
+        self._drivetrain.pose = self.position
 
     def isFinished(self) -> bool:
         return True  # this is an instant command, it finishes right after it initialized
@@ -55,3 +56,4 @@ class ResetXY(Command):
         """
         nothing to do here, this is an instant command
         """
+        super().end(interrupted)

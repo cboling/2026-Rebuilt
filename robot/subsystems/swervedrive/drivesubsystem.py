@@ -38,7 +38,7 @@ from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.kinematics import ChassisSpeeds, SwerveModuleState, \
     SwerveModulePosition
-from wpimath.units import degrees, rotationsToRadians, meters_per_second, radians_per_second
+from wpimath.units import degrees, rotationsToRadians, meters_per_second, radians_per_second, meters
 from wpilib import getDeployDirectory
 
 from constants import USE_PYKIT, JOYSTICK_DEADBAND, MAX_SPEED, GYRO_REVERSED, WHEEL_RADIUS, WHEEL_CIRCUMFERENCE
@@ -350,6 +350,14 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         if utils.is_simulation():
             self._start_sim_thread()
 
+
+    @property
+    def robot(self) -> 'MyRobot':
+        return self._robot
+
+    @property
+    def container(self) -> 'RobotContainer':
+        return self._container
 
     @property
     def drive_request(self) -> swerve.requests.FieldCentric:
@@ -803,7 +811,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         angle_setter: PositionVoltage = PositionVoltage(0, 0, enable_foc=False, override_brake_dur_neutral=False)
         velocity_setter: VelocityTorqueCurrentFOC = VelocityTorqueCurrentFOC(0, 0)
         ticks_per_revolution = 4096
-        wheel_radius: units.meter = WHEEL_RADIUS
+        # wheel_radius: meters = WHEEL_RADIUS
         wheel_circumference: meters = WHEEL_CIRCUMFERENCE
 
         try:
