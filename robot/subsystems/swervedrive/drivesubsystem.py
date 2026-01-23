@@ -142,7 +142,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # Camera/localizer defaults
         self.front_camera = None
         self.vision_odometry = False
-        self._field_relative = False        # Assume robot-relative to start with
+        self.field_relative = False  # Assume robot-relative to start with
 
         cameras: Dict[str, Any] = kwargs.get("Cameras")
         if cameras is not None and "Front" in cameras:
@@ -151,7 +151,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             localizer = cameras["Front"].get("Localizer")
             if localizer:
                 self.vision_odometry = True
-                self._field_relative = True
+                self.field_relative = True
                 self.localizer = localizer
 
         # self.gyroOvershootFraction = 0.0
@@ -219,11 +219,11 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
         if not self.vision_odometry or RobotBase.isSimulation():
             # The robots movements are commanded based on the fixed coordinate system of the competition field
-            self._field_relative = True
+            self.field_relative = True
 
         else:
             # The robots movements are commanded based on the robot's own orientation
-            self._field_relative = False
+            self.field_relative = False
             self._init_vision_odometry()
 
             # self.field = self.quest_field

@@ -16,7 +16,6 @@
 # ------------------------------------------------------------------------ #
 
 import logging
-import platform
 import time
 from typing import List, Optional, Callable, Dict, Any
 
@@ -178,6 +177,9 @@ class RobotContainer:
         # Configure the additional autos that do not come from pathplanner
         self.configure_additional_autos()
 
+        # Register telemetry support
+        self.robot_drive.register_telemetry(lambda state: self._logger.telemeterize(state))
+
         # Speed limiter useful during initial development
         self._limit_chooser = None
         self.configure_speed_limiter()
@@ -192,17 +194,18 @@ class RobotContainer:
                                                                                "dashboard_initialize")):
                 subsystem.dashboard_initialize()
 
-        # Configure default command for driving using joystick sticks
-        field_relative = self.robot_drive._field_relative
-
-        # MacOS fixup
-        right_axis_x = XboxController.Axis.kRightX
-
-        if platform.system().lower() == "darwin":
-            hid_axis = self.driver_controller.getHID().Axis
-            if hid_axis.kRightX != 2:
-                right_axis_x = XboxController.Axis.kLeftTrigger
-
+        # TODO: Currently we are always field centric wrt commands and using Pathplanner
+        # # Configure default command for driving using joystick sticks
+        # field_relative = self.robot_drive.field_relative
+        #
+        # # MacOS fixup
+        # right_axis_x = XboxController.Axis.kRightX
+        #
+        # if platform.system().lower() == "darwin":
+        #     hid_axis = self.driver_controller.getHID().Axis
+        #     if hid_axis.kRightX != 2:
+        #         right_axis_x = XboxController.Axis.kLeftTrigger
+        #
         # drive_cmd = HolonomicDrive(self,
         #                            self.robot_drive,
         #                            forwardSpeed=lambda: -self.driver_controller.getRawAxis(XboxController.Axis.kLeftY),
@@ -214,9 +217,6 @@ class RobotContainer:
         #                            square=True)
         #
         # self.robot_drive.setDefaultCommand(drive_cmd)
-        #
-        # # TODO: Move pathfinding init here so it is ready for autonomous mode
-        #
 
     @property
     def max_speed(self) -> meters_per_second:
@@ -317,16 +317,25 @@ class RobotContainer:
         RSB == Right Stick Button
 
         D-Pad == Directional Pad
+                - Up        Drive forward in X-Direction at 1/2 speed
+                - Right
+                - Down      Drive backward in X-Direction at 1/2 speed
+                - Left
 
+        LB == Left Bumper    Resets the rotation of the robot pose to the given value from
+                             the ForwardPerspectiveValue.OPERATOR_PERSPECTIVE perspective
         RB == Right Bumper
-        RT == Right Trigger
-        LB == Left Bumper
-        LT == Left Trigger
 
+        LT == Left Trigger
+        RT == Right Trigger
+
+        A == A Button (Bottom)  -  Brake
+        B == B Button (Right)   -  Align all wheels in direction of the left-stick Y value
         Y == Y Button (Top)
-        A == A Button (Bottom)
         X == X Button (Left)
-        B == B Button (Right)
+
+        Start Button (three lines)  - Reset Gyro
+        Back Button
         """
         self.robot_drive.setDefaultCommand(
             # Drivetrain will execute this command periodically
@@ -383,21 +392,15 @@ class RobotContainer:
         # reset the field-centric heading on left bumper press
         self.driver_controller.leftBumper().onTrue(self.robot_drive.runOnce(self.robot_drive.seed_field_centric))
 
-        self.robot_drive.register_telemetry(lambda state: self._logger.telemeterize(state))
+        controller.start().onTrue(cmd.runOnce(lambda: self.robot_drive.resetGyroToInitial))
 
         # Robot Driver (primarily responsible for robot path
-
-        controller.a().onTrue(cmd.runOnce(lambda: self.robot_drive.zeroGyro))
-        controller.y().whileTrue(cmd.runOnce(lambda: self.robot_drive.lock,
-                                             self.robot_drive).repeatedly())
-
-        # TODO:  The Start button is the small menu button with three lines. Do we want this enabled
-        #
-        # controller.start().onTrue(cmd.runOnce(lambda: self.robot_drive.resetGyroToInitial))
+        # controller.a().onTrue(cmd.runOnce(lambda: self.robot_drive.zeroGyro))
+        # controller.y().whileTrue(cmd.runOnce(lambda: self.robot_drive.lock,
+        #                                      self.robot_drive).repeatedly())
 
         # controller.leftBumper().onTrue(driveRobotOrientedAngularVelocity)
         # controller.rightBumper().onTrue(driveFieldOrientedAngularVelocity)
-
 
     def _configure_shooter_button_bindings_xbox(self, controller: CommandXboxController) -> None:
         pass
