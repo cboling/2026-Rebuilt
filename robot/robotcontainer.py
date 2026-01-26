@@ -29,10 +29,7 @@ from wpimath.units import rotationsToRadians, meters_per_second, radians_per_sec
 
 import constants
 from commands.autonomous import pathplanner
-from constants import (FRONT_CAMERA_TYPE, FRONT_CAMERA_POSE_AND_HEADING, REAR_CAMERA_TYPE,
-                       REAR_CAMERA_POSE_AND_HEADING, LEFT_CAMERA_TYPE, LEFT_CAMERA_POSE_AND_HEADING,
-                       RIGHT_CAMERA_TYPE, RIGHT_CAMERA_POSE_AND_HEADING,
-                       )
+from constants import FRONT_CAMERA_INFO, REAR_CAMERA_INFO, LEFT_CAMERA_INFO, RIGHT_CAMERA_INFO
 from field.field_2026 import RebuiltField as Field
 from generated.tuner_constants import TunerConstants
 from lib_6107.commands.camera.follow_object import FollowObject, StopWhen
@@ -378,17 +375,14 @@ class RobotContainer:
 
         camera_subsystems = []
 
-        for label, camera_type, pose, localizer in (("front", FRONT_CAMERA_TYPE, FRONT_CAMERA_POSE_AND_HEADING, False),
-                                                    ("rear", REAR_CAMERA_TYPE, REAR_CAMERA_POSE_AND_HEADING, False),
-                                                    ("left", LEFT_CAMERA_TYPE, LEFT_CAMERA_POSE_AND_HEADING, False),
-                                                    ("right", RIGHT_CAMERA_TYPE, RIGHT_CAMERA_POSE_AND_HEADING, False)):
+        for camera_info in (FRONT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, LEFT_CAMERA_INFO):
 
-            camera_subsystem, localizer_subsystem = VisionSubsystem.create(camera_type, label,
-                                                                           self._field, localizer, pose,
+            camera_subsystem, localizer_subsystem = VisionSubsystem.create(camera_info,
+                                                                           self._field,
                                                                            self.robot_drive)
             if camera_subsystem is not None:
                 camera_subsystems.append(camera_subsystem)
-                self._cameras[label] = camera_subsystem
+                self._cameras[camera_info["Label"]] = camera_subsystem
 
             if localizer_subsystem is not None:
                 camera_subsystems.append(localizer_subsystem)

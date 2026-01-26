@@ -32,14 +32,16 @@ from lib_6107.constants import *
 
 USE_PYKIT = False
 
+
 class RobotModes(Enum):
     """Enum for robot modes."""
     REAL = 1
     SIMULATION = 2
     REPLAY = 3
 
+
 SIM_MODE = (
-    RobotModes.REPLAY  if "LOG_PATH" in os.environ and os.environ["LOG_PATH"] != ""
+    RobotModes.REPLAY if "LOG_PATH" in os.environ and os.environ["LOG_PATH"] != ""
     else RobotModes.SIMULATION
 )
 ROBOT_MODE = RobotModes.REAL if RobotBase.isReal() else SIM_MODE
@@ -65,17 +67,17 @@ AUTONOMOUS_END_TRIGGER_TIME = 10
 #
 # Maximum speed of the robot in meters per second, used to limit acceleration.
 
-MAX_SPEED: meters_per_second = TunerConstants.speed_at_12_volts         # TODO: Measure this
-MAX_ANGULAR_SPEED: radians_per_second = rotationsToRadians(0.75)        # TODO: Measure this
-MAX_ANGULAR_ACCELERATION: radians_per_second = rotationsToRadians(0.75) # Actually is radians/second^2
+MAX_SPEED: meters_per_second = TunerConstants.speed_at_12_volts  # TODO: Measure this
+MAX_ANGULAR_SPEED: radians_per_second = rotationsToRadians(0.75)  # TODO: Measure this
+MAX_ANGULAR_ACCELERATION: radians_per_second = rotationsToRadians(0.75)  # Actually is radians/second^2
 
 # Constraint for the motion profiled robot angle controller
 THETA_CONTROLLER_CONSTRAINTS = TrapezoidProfileRadians.Constraints(MAX_ANGULAR_SPEED,
                                                                    MAX_ANGULAR_ACCELERATION)
 # TODO: Do we need an 'Autonomous Mode' max speed, max accel, max_angular, ...
 
-WHEEL_RADIUS: meters        = TunerConstants._wheel_radius
-WHEEL_DIAMETER: meters      = WHEEL_RADIUS * 3
+WHEEL_RADIUS: meters = TunerConstants._wheel_radius
+WHEEL_DIAMETER: meters = WHEEL_RADIUS * 3
 WHEEL_CIRCUMFERENCE: meters = WHEEL_DIAMETER * math.pi
 
 # Hold time on motor brakes when disabled
@@ -118,44 +120,47 @@ class DeviceID(IntEnum):
     # Intake Subsystem
     INTAKE_DEVICE_ID = 11
 
-if True:
-    FRONT_CAMERA_TYPE = CAMERA_TYPE_PHOTONVISION
-    REAR_CAMERA_TYPE = CAMERA_TYPE_NONE
-    RIGHT_CAMERA_TYPE = CAMERA_TYPE_NONE
-    LEFT_CAMERA_TYPE = CAMERA_TYPE_NONE
-else:
-    FRONT_CAMERA_TYPE = CAMERA_TYPE_LIMELIGHT
-    REAR_CAMERA_TYPE = CAMERA_TYPE_PHOTONVISION
-    RIGHT_CAMERA_TYPE = CAMERA_TYPE_NONE
-    LEFT_CAMERA_TYPE = CAMERA_TYPE_NONE
 
-FRONT_CAMERA_POSE_AND_HEADING = {
+FRONT_CAMERA_INFO = {
+    "Type": CAMERA_TYPE_PHOTONVISION,
+    "Label": "front",
+    "Name": "PhotonVision",
     "Pose": Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(0.0)
+    "Heading": Rotation2d.fromDegrees(0.0),
+    "Localizer": False
 }
 
-REAR_CAMERA_POSE_AND_HEADING = {
+REAR_CAMERA_INFO = {
+    "Type": CAMERA_TYPE_NONE,
+    "Label": "rear",
+    "Name": "",
     "Pose": Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(180.0)
+    "Heading": Rotation2d.fromDegrees(180.0),
+    "Localizer": False
 }
 
-LEFT_CAMERA_POSE_AND_HEADING = {
+LEFT_CAMERA_INFO = {
+    "Type": CAMERA_TYPE_NONE,
+    "Label": "left",
+    "Name": "",
     "Pose": Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(0.0)
+    "Heading": Rotation2d.fromDegrees(0.0),
+    "Localizer": False
 }
 
-RIGHT_CAMERA_POSE_AND_HEADING = {
+RIGHT_CAMERA_INFO = {
+    "Type": CAMERA_TYPE_NONE,
+    "Label": "right",
+    "Name": "",
     "Pose": Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(180.0)
+    "Heading": Rotation2d.fromDegrees(180.0),
+    "Localizer": False
 }
-
 
 ###############################################################################
 # OPENTelemetry Support
 
-OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", default="cyberjagzz")
-OTEL_TRACE_EXPORTER = os.getenv("OTEL_TRACE_EXPORTER", default="console,otlp")
-OTEL_METRICS_EXPORTER = os.getenv("OTEL_METRICS_EXPORTER", default="console")
-OTEL_OLTP_ENDPOINT = os.getenv("OTEL_OLTP_ENDPOINT", default="supermicro:4317")
-
-
+# OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", default="cyberjagzz")
+# OTEL_TRACE_EXPORTER = os.getenv("OTEL_TRACE_EXPORTER", default="console,otlp")
+# OTEL_METRICS_EXPORTER = os.getenv("OTEL_METRICS_EXPORTER", default="console")
+# OTEL_OLTP_ENDPOINT = os.getenv("OTEL_OLTP_ENDPOINT", default="supermicro:4317")

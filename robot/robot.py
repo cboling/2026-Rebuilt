@@ -199,7 +199,7 @@ class MyRobot(MyRobotBase):
         Periodic code for all modes should go here.
 
         This function is called each time a new packet is received from the driver
-        station. All classes derived from 'Sybsystem' will have their 'periodic'
+        station. All classes derived from 'Subsystem' will have their 'periodic'
         function called automatically (right after this function). So only do
         non-Subsystem updates here
 

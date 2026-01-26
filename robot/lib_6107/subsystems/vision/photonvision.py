@@ -20,6 +20,7 @@ try:
 
     from typing import Optional
 
+    from ntcore import NetworkTableInstance
     from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
     from wpimath.geometry import Transform3d
     from wpimath.units import milliseconds, seconds
@@ -47,6 +48,10 @@ try:
                                                                        self._camera_transform)
             # Register for field layout changes
             field.register_layout_callback(self._on_field_change)
+
+            nt = NetworkTableInstance.getDefault()
+            self._network_table = nt.getTable("photonvision").getSubTable(name)
+            pass
 
         def _on_field_change(self, field: AprilTagField, layout: AprilTagFieldLayout) -> None:
             logger.error(
@@ -88,6 +93,8 @@ try:
             return self._latest_results
 
         def periodic(self) -> None:
+            super().periodic()
+
             if not self._is_simulation and self._estimator is not None:
                 latest_result: Optional[PhotonPipelineResult] = self.get_latest_results()
 
@@ -98,6 +105,8 @@ try:
                 self._latest_results = None
 
         def simulationPeriodic(self):
+            super().simulationPeriodic()
+
             # Update simulation based on physics engine (e.g., swerve drive sim)
             sim_robot_pose = self._drivetrain.pose
 

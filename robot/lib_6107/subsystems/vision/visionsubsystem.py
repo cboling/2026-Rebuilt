@@ -16,12 +16,13 @@
 # ------------------------------------------------------------------------ #
 
 import logging
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Dict, Any
 
 from commands2 import Subsystem
-from robotpy_apriltag import AprilTagFieldLayout, AprilTagField
+from ntcore import NetworkTableInstance
+from robotpy_apriltag import AprilTagFieldLayout, AprilTagField, AprilTagDetector
 from wpilib import RobotBase
-from wpimath.geometry import Transform3d
+from wpimath.geometry import Transform3d, Rotation2d
 from wpimath.units import degrees, percent
 
 import constants
@@ -76,10 +77,19 @@ class VisionSubsystem(Subsystem):
         self._drivetrain: 'DriveSubsystem' = drivetrain
         self._is_simulation: bool = RobotBase.isSimulation()
 
+        self._tag_detector = AprilTagDetector()
+        self._tag_detector.addFamily("tag16h5")
+        self._network_table: Optional[NetworkTableInstance] = None
+
     @staticmethod
-    def create(camera_type: str, name: str, field: Field, localizer: bool,
-               transform: Transform3d, drivetrain: 'DriveSubsystem') -> Tuple[
-        Optional['VisionSubsystem'], Optional['Subsystem']]:
+    def create(info: Dict[str, Any], field: Field,
+               drivetrain: 'DriveSubsystem') -> Tuple[Optional['VisionSubsystem'], Optional['Subsystem']]:
+
+        camera_type = info.get("Type", constants.CAMERA_TYPE_NONE)
+        localizer = info.get("Localizer")
+        transform: Transform3d = info.get("Pose")
+        name = info.get("Name", camera_type)
+        heading = info.get("Heading", Rotation2d.fromDegrees(0))
 
         camera_subsystem: Optional['VisionSubsystem'] = None
         localizer_subsystem: Optional['Subsystem'] = None
@@ -98,6 +108,7 @@ class VisionSubsystem(Subsystem):
                     camera_subsystem = PhotonVisionSubsystem(name, field, transform, drivetrain)
 
                     # if localizer:
+                    #     pass # TODO: Need to support
                     #     localizer_subsystem = PhotonLocalizer(self, self.robot_drive, "2025-reefscape.json")
                 except ImportError as e:
                     logger.error(f"PhotonVisionSubsystem not found, camera {name}: {e}")
@@ -110,6 +121,10 @@ class VisionSubsystem(Subsystem):
 
     def get_latest_results(self) -> Optional[Any]:
         raise NotImplementedError("Implement in subclass")
+
+    def periodic(self):
+
+        pass  # For now  TODO: Can any of this be common
 
     def simulationPeriodic(self):
         pass  # For now  TODO: Can any of this be common
