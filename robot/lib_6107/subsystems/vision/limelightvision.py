@@ -56,7 +56,7 @@ try:
             self.tx = self._network_table.getDoubleTopic("tx").getEntry(0.0)
             self.ty = self._network_table.getDoubleTopic("ty").getEntry(0.0)
             self.ta = self._network_table.getDoubleTopic("ta").getEntry(0.0)
-            self.hb = self._network_table.getIntegerTopic("hb").getEntry(0)
+            self.thb = self._network_table.getIntegerTopic("hb").getEntry(0)
 
             self._last_heartbeat = 0
             self._last_heartbeat_time = 0
@@ -75,9 +75,9 @@ try:
             """
             Operator selected a different field layout.
             """
-            pass  # TODO: SUpport in future
+            pass  # TODO: Support in future
 
-        def addLocalizer(self):
+        def add_localizer(self):
             if self._localizer_subscribed:
                 return
 
@@ -88,8 +88,7 @@ try:
             self._robotOrientationSetRequest = self._network_table.getDoubleArrayTopic(
                 "robot_orientation_set").publish()
             self._cameraPoseSetRequest = self._network_table.getDoubleArrayTopic("camerapose_robotspace_set").publish()
-            self._imuModeRequest = self._network_table.getIntegerTopic(
-                "imumode_set").publish()  # this is only for Limelight 4
+            self._imuModeRequest = self._network_table.getIntegerTopic("imumode_set").publish()  # this is only for Limelight 4
 
             # and we can then receive the localizer results from the camera back
             self._botPose = self._network_table.getDoubleArrayTopic("botpose_orb_wpiblue").getEntry([])
@@ -123,23 +122,23 @@ try:
             return None
 
         @property
-        def A(self) -> float:
+        def a(self) -> float:
             return self.ta.get()
 
         @property
-        def X(self) -> float:
+        def x(self) -> float:
             return self.tx.get()
 
         @property
-        def Y(self) -> float:
+        def y(self) -> float:
             return self.ty.get()
 
         @property
-        def HB(self) -> float:
-            return self.hb.get()
+        def hb(self) -> float:
+            return self.thb.get()
 
         def detection(self) -> bool:
-            return self.X != 0.0 and self._heartbeating
+            return self.x != 0.0 and self._heartbeating
 
         def getSecondsSinceLastHeartbeat(self) -> float:
             return Timer.getFPGATimestamp() - self.lastHeartbeatTime
@@ -148,7 +147,7 @@ try:
             super().periodic()
 
             now = Timer.getFPGATimestamp()
-            heartbeat = self.HB
+            heartbeat = self.hb
 
             if heartbeat != self._last_heartbeat:
                 self._last_heartbeat = heartbeat
@@ -157,7 +156,7 @@ try:
             heart_beating = now < self._last_heartbeat_time + 5  # no heartbeat for 5s => stale camera
 
             if heart_beating != self._heartbeating:
-                logger.warning(f"Camera {self.name}: {'UPDATING' if heart_beating else 'NO LONGER UPDATING'}")
+                logger.warning(f"Camera {self._name}: {'UPDATING' if heart_beating else 'NO LONGER UPDATING'}")
 
             self._heartbeating = heart_beating
 
@@ -168,6 +167,11 @@ try:
 
             pass
 
+        def startTakingSnapshotsWhenNoDetection(self, secondsBetweenSnapshots=1.0):
+            self.takingSnapshotsWhenNoDetection = secondsBetweenSnapshots
+
+        def stopTakingSnapshotsWhenNoDetection(self):
+            self.takingSnapshotsWhenNoDetection = 0.0
 
 except ImportError as _e:
     pass

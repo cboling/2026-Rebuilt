@@ -281,13 +281,13 @@ class RobotContainer:
                              the ForwardPerspectiveValue.OPERATOR_PERSPECTIVE perspective
         RB == Right Bumper
 
-        LT == Left Trigger
-        RT == Right Trigger
+        LT == Left Trigger  - Rotate (in-place) toward best AprilTag
+        RT == Right Trigger - Follow the best AprilTag around the room
 
-        A == A Button (Bottom)  -  Brake
-        B == B Button (Right)   -  Align all wheels in direction of the left-stick Y value
-        Y == Y Button (Top)
-        X == X Button (Left)
+        A == A Button (Bottom) - Brake
+        B == B Button (Right)  - Align all wheels in direction of the left-stick Y value
+        Y == Y Button (Top)    - Reset Telemetry. Facing North
+        X == X Button (Left)   -
 
         Start Button (three lines)  - Reset Gyro
         Back Button
@@ -308,27 +308,49 @@ class RobotContainer:
         Trigger(DriverStation.isDisabled).whileTrue(
             self.robot_drive.apply_request(lambda: idle).ignoringDisable(True)
         )
+        # Left Trigger - Rotate (in-place) toward best AprilTag
+        self.driver_controller.leftTrigger(threshold=0.25).whileTrue(
+            Ai
+        )
+        # Right Trigger - Follow the best AprilTag around the room
 
-        self.driver_controller.a().whileTrue(self.robot_drive.apply_request(lambda: self.robot_drive.brake_request))
+        # A Button - Brake
+        self.driver_controller.a().whileTrue(
+            self.robot_drive.apply_request(lambda: self.robot_drive.brake_request)
+        )
+        # B Button - Align all wheels in the direction of the left stick Y value
         self.driver_controller.b().whileTrue(
             self.robot_drive.apply_request(
                 lambda: self.robot_drive.point_at_request.with_module_direction(
-                    Rotation2d(-self.driver_controller.getLeftY(), -self.driver_controller.getLeftX())
+                    Rotation2d(-self.driver_controller.getLeftY(),
+                               -self.driver_controller.getLeftX())
                 )
             )
         )
-
+        # Y Button - Reset x/y to defaults and heading to 'North' (0 degrees)
+        self.driver_controller.b().whileTrue(
+            ResetXY(self.robot_drive, x=1.0, y=4.0, heading=0)
+        )
+        # POV-UP: Drive forward at 1/2 speed
         self.driver_controller.povUp().whileTrue(
             self.robot_drive.apply_request(
                 lambda: self.robot_drive.forward_straight_request.with_velocity_x(0.5).with_velocity_y(0)
             )
         )
+        # POV-DOWN: Drive backwards at 1/2 speed
         self.driver_controller.povDown().whileTrue(
             self.robot_drive.apply_request(
                 lambda: self.robot_drive.forward_straight_request.with_velocity_x(-0.5).with_velocity_y(0)
             )
         )
+        # Left Bumper - reset the field-centric heading on left bumper press
+        self.driver_controller.leftBumper().onTrue(
+            self.robot_drive.runOnce(self.robot_drive.seed_field_centric)
+        )
+        # Start Button
+        controller.start().onTrue(cmd.runOnce(lambda: self.robot_drive.resetGyroToInitial))
 
+        # Back Buttons (complex.  TODO Investigate these)
         # Run SysId routines when holding back/start and X/Y.
         # Note that each routine should be run exactly once in a single log.
         (self.driver_controller.back() & self.driver_controller.y()).whileTrue(
@@ -343,19 +365,6 @@ class RobotContainer:
         (self.driver_controller.start() & self.driver_controller.x()).whileTrue(
             self.robot_drive.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
         )
-
-        # reset the field-centric heading on left bumper press
-        self.driver_controller.leftBumper().onTrue(self.robot_drive.runOnce(self.robot_drive.seed_field_centric))
-
-        controller.start().onTrue(cmd.runOnce(lambda: self.robot_drive.resetGyroToInitial))
-
-        # Robot Driver (primarily responsible for robot path
-        # controller.a().onTrue(cmd.runOnce(lambda: self.robot_drive.zeroGyro))
-        # controller.y().whileTrue(cmd.runOnce(lambda: self.robot_drive.lock,
-        #                                      self.robot_drive).repeatedly())
-
-        # controller.leftBumper().onTrue(driveRobotOrientedAngularVelocity)
-        # controller.rightBumper().onTrue(driveFieldOrientedAngularVelocity)
 
     def _configure_shooter_button_bindings_xbox(self, controller: CommandXboxController) -> None:
         pass
