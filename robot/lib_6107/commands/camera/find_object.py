@@ -43,7 +43,7 @@ class FindObject(commands2.Command):
         self.subcommand.initialize()
 
     def isFinished(self) -> bool:
-        return self.camera0.hasDetection()
+        return self.camera0.valid()
 
     def execute(self):
         # 1. just execute the wait+turn subcommand

@@ -136,7 +136,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._last_pose: Optional[Pose2d] = None
 
         # Camera/localizer defaults
-        self.front_camera = None
         self.vision_odometry = False
         self.field_relative = False  # Assume robot-relative to start with
 
@@ -700,6 +699,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     def rotate(self, rotation: radians_per_second) -> None:
         """
         Rotate the robot in place, without moving laterally (for example, for aiming)
+
         :param rotation: rotational speed
         """
         self.arcade_drive(0, rotation, field_relative=True)

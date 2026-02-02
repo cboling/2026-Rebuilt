@@ -14,7 +14,7 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
-# From Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
+# Adapted from Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
 #
 # Copyright (c) FIRST and other WPILib contributors.
 # Open Source Software; you can modify and/or share it under the terms of
@@ -43,18 +43,22 @@ class AimToDirectionConstants:
 
 
 class AimToDirection(BaseCommand):
-
-    name = "AimToDirection"  # change this to something appropriate for this command
+    """
+    AimToDirection can be used to turn to a specific heading and optionally begin
+    to move forward. Both turn rate [-1.0..1.0] and forward rate [0.0..1.0] can
+    be specified.
+    """
+    name = "AimToDirection"
 
     def __init__(self, drivetrain: DriveSubsystem,
                  heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
-                 speed: Optional[float] = 1.0,
+                 turn_speed: Optional[float] = 1.0,
                  fwd_speed: Optional[float] = 0.0):
         super().__init__(drivetrain)
 
-        self._speed = min((1.0, abs(speed)))
+        self._turn_speed = min((1.0, abs(turn_speed)))
         self._target_direction = None
-        self._fwd_speed = fwd_speed
+        self._fwd_speed = min(1.0, max(0.0, fwd_speed))
 
         # setting the target angle in a way that works for all cases
         self._target_degrees = heading
@@ -77,12 +81,18 @@ class AimToDirection(BaseCommand):
         # Register the function itself
         NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
 
-    def initialize(self):
+    def initialize(self) -> None:
+        """
+        Called just before this Command runs the first time
+        """
         super().initialize()
 
         self._target_direction = Rotation2d.fromDegrees(self._target_degrees())
 
-    def execute(self):
+    def execute(self) -> None:
+        """
+        The main body of a command. Called repeatedly while the command is scheduled.
+        """
         # 1. how many degrees are left to turn?
         current_direction = self._drivetrain.heading
         rotation_remaining = self._target_direction - current_direction
@@ -96,7 +106,7 @@ class AimToDirection(BaseCommand):
             degrees_remaining += 360
 
         # 2. proportional control: if we are almost finished turning, use slower turn speed (to avoid overshooting)
-        turn_speed = self._speed
+        turn_speed = self._turn_speed
         proportional_speed = AimToDirectionConstants.kP * abs(degrees_remaining)
 
         if AimToDirectionConstants.USE_SQRT_CONTROL:
@@ -114,12 +124,13 @@ class AimToDirection(BaseCommand):
         else:
             self._drivetrain.arcade_drive(self._fwd_speed, -turn_speed)  # otherwise, turn left
 
-    def end(self, interrupted: bool):
-        self._drivetrain.stop()
-
-        super().end(interrupted)
-
     def isFinished(self) -> bool:
+        """
+        Whether the command has finished. Once a command finishes, the scheduler will call its :meth:`commands2.Command.end`
+        method and un-schedule it.
+
+        :returns: whether the command has finished.
+        """
         if self._fwd_speed != 0:
             return False  # if someone wants us to drive forward while aiming, then we are never finished
 
@@ -137,3 +148,16 @@ class AimToDirection(BaseCommand):
                 return True
 
         return False
+
+    def end(self, interrupted: bool) -> None:
+        """
+        The action to take when the command ends. Called when either the command finishes normally, or
+        when it interrupted/canceled.
+
+        Do not schedule commands here that share requirements with this command. Use :meth:`.andThen` instead.
+
+        :param interrupted: whether the command was interrupted/canceled
+        """
+        self._drivetrain.stop()
+
+        super().end(interrupted)

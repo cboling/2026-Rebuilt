@@ -23,7 +23,7 @@ try:
     from wpilib import Timer
     from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
     from wpimath.geometry import Transform3d
-    from wpimath.units import milliseconds, seconds
+    from wpimath.units import milliseconds, seconds, degrees, percent
 
     from ntcore import DoubleArrayTopic, DoubleTopic, DoubleEntry, IntegerTopic, \
         IntegerEntry, DoubleArrayPublisher, DoublePublisher, DoubleArrayEntry, \
@@ -135,23 +135,37 @@ try:
             return None
 
         @property
-        def a(self) -> float:
+        def valid(self) -> bool:
+            return self.x != 0.0 and self._heart_beating
+
+        @property
+        def area(self) -> percent:
+            """
+            Target Area (0..100] percent of image
+            """
             return self._ta.get()
 
         @property
-        def x(self) -> float:
+        def x_offset(self) -> degrees:
+            """
+            Horizontal Offset from Crosshair to Target [-29.9..29.8] degrees
+            """
             return self._tx.get()
 
         @property
-        def y(self) -> float:
+        def y_offset(self) -> degrees:
+            """
+            Vertical Offset from Crosshair to Target [-24.85..24.85]
+            """
             return self._ty.get()
 
         @property
         def hb(self) -> float:
+            """
+            Heartbeat value. Increases once per frame and rolls over at 2 billion.
+            """
             return self._hb.get()
 
-        def detection(self) -> bool:
-            return self.x != 0.0 and self._heart_beating
 
         def get_seconds_since_last_heartbeat(self) -> float:
             return Timer.getFPGATimestamp() - self._last_heartbeat_time

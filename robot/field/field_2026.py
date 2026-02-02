@@ -71,27 +71,27 @@ class RebuiltField(Field):
 
     When looking at the playing field, the origin is 0,0 (bottom left corner in landscape
     mode) with the Blue team on the left (lowest x-coordinate).  For the three teams in
-    an alliance, we also assume
+    an alliance, we also assume Blue 1 is top left, Red 1 is bottom right.
 
     NOTE: Any positional information will change each year based on the field. One other
           assumption is that
 
-    All values are in meters
+    All values are in meters.
     """
     _field_info: FieldInfo = tuple([
-        tuple(["Rebuilt (AndyMark)", AprilTagField.k2026RebuiltAndyMark, "2026-rebuilt-andymark.json"]),
+        # Default for a chooser will be the first entry below.
         tuple(["Rebuilt (Welded)", AprilTagField.k2026RebuiltWelded, "2026-rebuilt-welded.json"]),
-        tuple(["Custom", None, "2026-rebuilt-andymark.json"])
+        tuple(["Rebuilt (AndyMark)", AprilTagField.k2026RebuiltAndyMark, "2026-rebuilt-andymark.json"]),
     ])
 
     def in_blue_alliance_zone(self, x: float) -> bool:
         return x < inchesToMeters(182.11)
 
     def in_red_alliance_zone(self, x: float) -> bool:
-        return x > FIELD_X_SIZE - inchesToMeters(182.11)
+        return x > self.field_length - inchesToMeters(182.11)
 
     def in_neutral_zone(self, x: float) -> bool:
-        return inchesToMeters(182.11) < x < FIELD_X_SIZE - inchesToMeters(182.11)
+        return inchesToMeters(182.11) < x < self.field_length - inchesToMeters(182.11)
 
     @property
     def field_length(self) -> meters:

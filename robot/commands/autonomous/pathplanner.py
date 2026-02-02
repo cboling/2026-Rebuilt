@@ -27,17 +27,17 @@ from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 from pathplannerlib.events import EventTrigger
 from pathplannerlib.logging import PathPlannerLogging
 from pykit.logger import Logger
-from wpilib import DriverStation, SendableChooser, getDeployDirectory
+from wpilib import DriverStation, getDeployDirectory, SendableChooser
 from wpimath.kinematics import ChassisSpeeds
 from wpimath.units import degreesToRadians
 
 from commands.intake.intake_commands import IntakeCollectFuel
 from constants import USE_PYKIT
+from lib_6107.commands.camera.approach_tag import ApproachTag
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
-from lib_6107.commands.drivetrain.approach_tag import ApproachTag
 from lib_6107.commands.drivetrain.arcade_drive import ArcadeDrive
 from lib_6107.commands.drivetrain.gotopoint import GoToPoint
-from lib_6107.commands.drivetrain.swervetopoint import SwerveToPoint, SwerveMove
+from lib_6107.commands.drivetrain.swervetopoint import SwerveMove, SwerveToPoint
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 logger = logging.getLogger(__name__)
@@ -123,8 +123,11 @@ def register_commands_and_triggers(drivetrain: DriveSubsystem, container: 'Robot
     for obj, param in commands:
         obj.pathplanner_register(param)
 
-    # And a few special ones
-    if drivetrain.front_camera is not None:
+    # And a few special ones depending upon support
+    front_camera = drivetrain.container.camera("front")
+
+    if front_camera is not None:
+        # TODO: Add more to this location
         ApproachTag.pathplanner_register(drivetrain)
 
     # Now all the triggers. This is where we can add custom commands that take arguments.

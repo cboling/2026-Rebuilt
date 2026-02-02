@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, List, Optional
 from commands2 import button, cmd, Command, InstantCommand, PrintCommand, RunCommand, Subsystem
 from commands2.button import CommandXboxController, Trigger
 from commands2.sysid import SysIdRoutine
-from ntcore import Event, NetworkTableInstance
+from ntcore import NetworkTableInstance
 from phoenix6 import swerve
 from wpilib import DriverStation, Field2d, RobotBase, SendableChooser, SmartDashboard, XboxController
 from wpimath.geometry import Rotation2d
@@ -35,8 +35,8 @@ from constants import FRONT_CAMERA_INFO, LEFT_CAMERA_INFO, REAR_CAMERA_INFO, RIG
 from field.field_2026 import RebuiltField as Field
 from generated.tuner_constants import TunerConstants
 from lib_6107.commands.camera.follow_object import FollowObject, StopWhen
+from lib_6107.commands.camera.track_tag_command import TrackTagCommand
 from lib_6107.commands.drivetrain.arcade_drive import ArcadeDrive
-from lib_6107.commands.drivetrain.track_tagged_command import TrackTagCommand
 from lib_6107.commands.drivetrain.reset_xy import ResetXY
 from lib_6107.commands.drivetrain.trajectory import JerkyTrajectory, SwerveTrajectory
 from lib_6107.constants import DEFAULT_ROBOT_FREQUENCY
@@ -98,10 +98,6 @@ class RobotContainer:
         # self.robot_drive = DriveSubsystem(self, **drive_kwargs)
         self.robot_drive = TunerConstants.create_drivetrain(self)
 
-        # Init the Auto chooser.  PathPlanner init will fill in our choices
-        self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, self, "")
-        self._auto_end_chooser = SendableChooser()
-
         ##########################################
         #   VISION
         #
@@ -110,6 +106,25 @@ class RobotContainer:
         self._field: Field = Field()
 
         camera_subsystems = self._init_vision_subsystems()
+
+        ##########################################
+        #   SHOOTER
+        #
+
+        ##########################################
+        #   INTAKE
+        #
+
+        ##########################################
+        #   CLIMBER
+        #
+
+        ##########################################
+        #   PathPlanner.  Do this last since it may pull in commands that need the previously
+        #                 initialized subsystems.
+        # Init the Auto chooser.  PathPlanner init will fill in our choices
+        self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, self, "")
+        self._auto_end_chooser = SendableChooser()
 
         # Now save off our subsystems. The robot core code will already call the periodic() function
         # as needed, but having our own list (iterated in order) allows us to move much of
@@ -188,6 +203,9 @@ class RobotContainer:
     def field(self) -> Field2d:
         return self.robot.field
 
+    def camera(self, label: str) -> Optional[VisionSubsystem]:
+        return self._cameras.get(label)
+
     @property
     def alliance_location(self) -> int:
         """
@@ -243,12 +261,6 @@ class RobotContainer:
         match begins.
         """
         self._alliance_change_callbacks.append(callback)
-
-    def _on_alliance_change(self, event: Event, *args, **kwargs) -> None:
-        flags = event.flags
-        pass
-        pass
-        pass
 
     def set_start_time(self) -> None:  # call in teleopInit and autonomousInit in the robot
         self.start_time = time.time()
@@ -439,7 +451,8 @@ class RobotContainer:
         instantiating a :GenericHID or one of its subclasses (Joystick or XboxController),
         and then passing it to a JoystickButton.
         """
-        logger.debug(f"*** called configureButtonBindings, controller: {controller}, is_driver: {is_driver}")
+        logger.warning(
+            f"*** called configure_button_bindings_joystick, controller: {controller}, is_driver: {is_driver}")
         pass  # TODO: Not supported at this time. If this is supported, look into places where
         #       XboxController may be used directly (such as in the default drive command
         #       above). Eventually need to abstract this.
@@ -587,9 +600,9 @@ class RobotContainer:
         from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
 
         # example commands that test drivetrain's motors and gyro (our only subsystem)
-        turn_right = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(-45), speed=0.25)
-        turn_left = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(45), speed=0.25)
-        back_to_zero = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(0), speed=0.0)
+        turn_right = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(-45), turn_speed=0.25)
+        turn_left = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(45), turn_speed=0.25)
+        back_to_zero = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(0), turn_speed=0.0)
 
         command = turn_right.andThen(turn_left).andThen(back_to_zero)
         return command

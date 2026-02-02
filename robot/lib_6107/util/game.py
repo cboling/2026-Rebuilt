@@ -29,9 +29,10 @@ import robotpy_apriltag
 import wpilib
 from wpimath.geometry import Pose2d, Pose3d, Rotation2d, Translation2d
 
-apriltag_layout = robotpy_apriltag.AprilTagFieldLayout.loadField(robotpy_apriltag.AprilTagField.k2025ReefscapeWelded)
+apriltag_layout = robotpy_apriltag.AprilTagFieldLayout.loadField(robotpy_apriltag.AprilTagField.k2026RebuiltWelded)
 
-TagId = typing.Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+TagId = typing.Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
 
 get_fiducial_pose = typing.cast(typing.Callable[[TagId], Pose3d], apriltag_layout.getTagPose)
 

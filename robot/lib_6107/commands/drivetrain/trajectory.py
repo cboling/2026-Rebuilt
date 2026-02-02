@@ -20,20 +20,20 @@
 # Open Source Software; you can modify and/or share it under the terms of
 # the WPILib BSD license file in the root directory of this project.
 
-from typing import List, Tuple, Optional, Callable
+from typing import Callable, List, Optional, Tuple
 
 import commands2
 from commands2 import InstantCommand
-from wpilib import SmartDashboard, DriverStation
+from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 
 from constants import MAX_SPEED, THETA_CONTROLLER_CONSTRAINTS
-from subsystems.swervedrive.constants import DriveConstants, AutoConstants
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from lib_6107.commands.command import BaseCommand
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
 from lib_6107.commands.drivetrain.gotopoint import GoToPoint
 from lib_6107.commands.drivetrain.swervetopoint import SwerveToPoint
-from lib_6107.commands.command import BaseCommand
+from subsystems.swervedrive.constants import AutoConstants, DriveConstants
+from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 FIELD_WIDTH = 8.052
 FIELD_LENGTH = 17.55
@@ -42,7 +42,7 @@ U_TURN = Rotation2d.fromDegrees(180)
 
 class JerkyTrajectory(BaseCommand):
 
-    name = "TODO"  # change this to something appropriate for this command
+    name = "JerkyTrajectory"
 
     def __init__(
             self,
@@ -121,7 +121,7 @@ class JerkyTrajectory(BaseCommand):
         if direction is not None:
             degrees = direction.degrees()
             log = lambda: SmartDashboard.putString(f"command/{self.getName()}", f"aim: {degrees}")
-            aim = AimToDirection(degrees, speed=self.speed, drivetrain=self._drivetrain).beforeStarting(log)
+            aim = AimToDirection(degrees, turn_speed=self.speed, drivetrain=self._drivetrain).beforeStarting(log)
             commands.append(aim)
 
         # connect all these commands together and start
@@ -245,6 +245,9 @@ class JerkyTrajectory(BaseCommand):
 
 
 class SwerveTrajectory(JerkyTrajectory):
+
+    name = "SwerveTrajectory"
+
     def is_reversed(self):
         waypoints = self.waypoints[1:]
         waypoints.reverse()
@@ -334,7 +337,7 @@ class SwerveTrajectory(JerkyTrajectory):
         if end_heading is not None:
             degrees = end_heading.degrees()
             log = lambda: SmartDashboard.putString(f"command/{self.getName()}", f"aim: {degrees}")
-            stop = AimToDirection(self._drivetrain, degrees, speed=self.speed).beforeStarting(log)
+            stop = AimToDirection(self._drivetrain, degrees, turn_speed=self.speed).beforeStarting(log)
         else:
             stop = InstantCommand(self._drivetrain.stop, self._drivetrain)
 

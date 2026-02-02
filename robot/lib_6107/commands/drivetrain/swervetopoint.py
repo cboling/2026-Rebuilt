@@ -14,7 +14,7 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
-# From Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
+# Adapted from Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
 #
 # Copyright (c) FIRST and other WPILib contributors.
 # Open Source Software; you can modify and/or share it under the terms of
@@ -22,12 +22,12 @@
 #
 
 import math
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 from commands2 import Command
 from pathplannerlib.auto import NamedCommands
 from wpilib import SmartDashboard
-from wpimath.geometry import Rotation2d, Translation2d, Pose2d
+from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 from wpimath.units import degrees, meters
 
 from lib_6107.commands.command import BaseCommand
@@ -36,11 +36,18 @@ from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 
 
 class SwerveToPoint(BaseCommand):
+    """
+    Goto a specific point on the field
+
+    TODO: See if we can combine this with gotopoint and use pathplanner
+    TODO: Support field limits
+    """
+    name = "SwerveToPoint"
 
     def __init__(self,
                  drivetrain: 'DriveSubsystem',
-                 x:  Optional[int | float] = 0,
-                 y:  Optional[int | float] = 0,
+                 x: Optional[meters] = 0,
+                 y: Optional[meters] = 0,
                  heading: Optional[Rotation2d | degrees] = 0.0,
                  speed: Optional[float] = 1.0,
                  slow_down_at_finish: Optional[bool] = True,
@@ -59,7 +66,7 @@ class SwerveToPoint(BaseCommand):
         else:
             self._target_heading = None
 
-        self._speed = speed
+        self._speed = min(1.0, max(0.0, speed))
         self._stop = slow_down_at_finish
         self._rate_limit = rate_limit
 
@@ -79,7 +86,10 @@ class SwerveToPoint(BaseCommand):
         # Register the function itself
         NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
 
-    def initialize(self):
+    def initialize(self) -> None:
+        """
+        Called just before this Command runs the first time
+        """
         super().initialize()
 
         initial_pose = self._drivetrain.pose
@@ -91,7 +101,10 @@ class SwerveToPoint(BaseCommand):
         self._initial_distance = self._initial_position.distance(self._target_pose.translation())
         self._overshot = False
 
-    def execute(self):
+    def execute(self) -> None:
+        """
+        The main body of a command. Called repeatedly while the command is scheduled.
+        """
         current_xy = self._drivetrain.pose
         x_distance, y_distance = self._target_pose.x - current_xy.x, self._target_pose.y - current_xy.y
         total_distance = self._target_pose.translation().distance(current_xy.translation())
@@ -133,11 +146,13 @@ class SwerveToPoint(BaseCommand):
 
         self._drivetrain.drive(speed.x, speed.y, turning_speed, field_relative=False, rate_limit=self._rate_limit)
 
-    def end(self, interrupted: bool):
-        self._drivetrain.stop()
-        super().end(interrupted)
-
     def isFinished(self) -> bool:
+        """
+        Whether the command has finished. Once a command finishes, the scheduler will call its :meth:`commands2.Command.end`
+        method and un-schedule it.
+
+        :returns: whether the command has finished.
+        """
         current_pose = self._drivetrain.pose
         current_position = current_pose.translation()
 
@@ -162,6 +177,19 @@ class SwerveToPoint(BaseCommand):
                 return True  # case 2: overshot in distance and target direction is correct
 
         return False
+
+    def end(self, interrupted: bool):
+        """
+        The action to take when the command ends. Called when either the command finishes normally, or
+        when it interrupted/canceled.
+
+        Do not schedule commands here that share requirements with this command. Use :meth:`.andThen` instead.
+
+        :param interrupted: whether the command was interrupted/canceled
+        """
+        self._drivetrain.stop()
+
+        super().end(interrupted)
 
     def get_degrees_left_to_turn(self):
         # can we get rid of this function by using Rotation2d? probably we can
@@ -216,6 +244,9 @@ class SwerveMove(BaseCommand):
         NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
 
     def initialize(self):
+        """
+        Called just before this Command runs the first time
+        """
         super().initialize()
 
         position = self._drivetrain.pose
@@ -232,12 +263,30 @@ class SwerveMove(BaseCommand):
         self._subcommand.initialize()
 
     def isFinished(self) -> bool:
+        """
+        Whether the command has finished. Once a command finishes, the scheduler will call its :meth:`commands2.Command.end`
+        method and un-schedule it.
+
+        :returns: whether the command has finished.
+        """
         return self._subcommand.isFinished()
 
     def execute(self):
+        """
+        The main body of a command. Called repeatedly while the command is scheduled.
+        """
         return self._subcommand.execute()
 
     def end(self, interrupted: bool):
+        """
+        The action to take when the command ends. Called when either the command finishes normally, or
+        when it interrupted/canceled.
+
+        Do not schedule commands here that share requirements with this command. Use :meth:`.andThen` instead.
+
+        :param interrupted: whether the command was interrupted/canceled
+        """
         self._subcommand.end(interrupted)
+
         super().end(interrupted)
 

@@ -126,6 +126,10 @@ class VisionSubsystem(Subsystem):
         return self._name
 
     @property
+    def drivetrain(self) -> 'DriveSubsystem':
+        return self._drivetrain
+
+    @property
     def april_tag_field(self) -> AprilTagField:
         return self._april_tag_field
 
@@ -133,7 +137,6 @@ class VisionSubsystem(Subsystem):
         raise NotImplementedError("Implement in subclass")
 
     def periodic(self):
-
         pass  # For now  TODO: Can any of this be common
 
     def simulationPeriodic(self):

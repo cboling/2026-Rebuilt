@@ -5,7 +5,7 @@
 #
 
 import math
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from commands2 import Command
 from pathplannerlib.auto import NamedCommands
@@ -16,6 +16,7 @@ from wpimath.units import meters, percent, seconds
 from lib_6107.commands.command import BaseCommand
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
+from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
@@ -64,8 +65,11 @@ class Tunable:
 
 
 class ApproachTag(BaseCommand):
+    """
+    Align the swerve robot to AprilTag precisely and then optionally slowly push it forward for a split second
+    """
     def __init__(self, drivetrain: DriveSubsystem,
-                 camera: Optional[Any] = None,
+                 camera: Optional[VisionSubsystem] = None,
                  specific_heading: Optional[Rotation2d | Callable[[], Rotation2d]] = None,
                  speed: Optional[float]=1.0,
                  reverse: Optional[bool]=False,
@@ -78,7 +82,8 @@ class ApproachTag(BaseCommand):
                  dashboard_name: Optional[str] = ""):
         """
         Align the swerve robot to AprilTag precisely and then optionally slowly push it forward for a split second
-        :param camera: camera to use, LimelightCamera or PhotonVisionCamera (from https://github.com/epanov1602/CommandRevSwerve/blob/main/docs/Adding_Camera.md)
+
+        :param camera: camera to use, LimelightCamera or PhotonVisionCamera
         :param drivetrain: a drivetrain that implements swerve drive functionality (or mecanum/ball, must veer to sides)
         :param specific_heading: do you want the robot to face in a very specific direction? then specify it
         :param speed: positive speed, even if camera is on the back of your robot (for the latter case set reverse=True)
@@ -88,13 +93,18 @@ class ApproachTag(BaseCommand):
         :param camera_minimum_fps: what is the minimal number of **detected** frames per second expected from this camera
         """
         super().__init__(drivetrain)
-        assert hasattr(camera, "getX"), "camera must have `getX()` to give us the object coordinate (in degrees)"
-        assert hasattr(camera, "getA"), "camera must have `getA()` to give us object size (in % of screen)"
-        assert hasattr(camera, "getSecondsSinceLastHeartbeat"), "camera must have a `getSecondsSinceLastHeartbeat()`"
+
+        self._camera = camera or drivetrain.container.camera('rear' if reverse else 'front')
+
+        assert hasattr(self._camera,
+                       "x_offset"), "camera must have `x_offset` to give us the object coordinate (in degrees)"
+        assert hasattr(self._camera, "area"), "camera must have `area` to give us object size (in % of screen)"
+        assert hasattr(self._camera,
+                       "get_seconds_since_last_heartbeat"), "camera must have a `get_seconds_since_last_heartbeat"
         assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
-        self._camera = camera or drivetrain.front_camera
-        self.addRequirements(camera)
+        self.addRequirements(self._camera)
+        self.addRequirements(drivetrain)
 
         self._start_time: float = 0
         self._reverse = reverse
@@ -105,8 +115,9 @@ class ApproachTag(BaseCommand):
         self._push_forward_seconds = push_forward
 
         if self._push_forward_seconds is None:
-            self._push_forward_seconds = Tunable(settings, dashboard_name, "BrakeDst", 1.0, (0.0, 10.0))
-
+            self._push_forward_seconds = Tunable(settings, dashboard_name,
+                                                 "BrakeDst", 1.0,
+                                                 (0.0, 10.0))
         elif not callable(self._push_forward_seconds):
             self._push_forward_seconds = lambda: push_forward
 
@@ -138,6 +149,7 @@ class ApproachTag(BaseCommand):
         self._reached_glide_path_time = 0.0  # time when aligned to the tag and desired direction for the first time
         self._reached_final_approach_time = 0.0  # time when reached the final approach
         self._reached_final_approach_xy = Translation2d(0, 0)
+        self._final_approach_seconds = 0.0
         self._lost_tag = ""
         self._finished = ""
 
@@ -160,8 +172,8 @@ class ApproachTag(BaseCommand):
         # Register the function itself
         NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
 
-    def isReady(self, min_required_object_size=0.3):
-        return self._camera.hasDetection() and self._camera.getA() > min_required_object_size
+    def is_ready(self, min_required_object_size = 0.3):
+        return self._camera.valid and self._camera.area > min_required_object_size
 
     def init_tunables(self, settings, prefix):
         self.KPMULT_TRANSLATION = Tunable(settings, prefix, "GainTran", 0.5, (0.1, 8.0))  # gain for how quickly to move
@@ -190,6 +202,9 @@ class ApproachTag(BaseCommand):
             self.tunables.append(self._push_forward_seconds)
 
     def initialize(self):
+        """
+        Called just before this Command runs the first time
+        """
         super().initialize()
 
         for t in self.tunables:
@@ -227,37 +242,10 @@ class ApproachTag(BaseCommand):
         self._last_state = -1
         self._last_warnings = None
 
-    def isFinished(self) -> bool:
-        if self._finished:
-            return True
-
-        now = Timer.getFPGATimestamp()
-
-        # bad ways to finish
-        if self._lost_tag:
-            self._finished = self._lost_tag
-
-        elif now > self._last_seen_object_time + self._detection_timeout + self._final_approach_seconds:
-            delay = now - self._last_seen_object_time
-            self._finished = f"not seen {int(1000 * delay)}ms"
-
-        # good ways to finish
-        elif self._reached_final_approach_time != 0:
-            length = (self._drivetrain.pose.translation() - self._reached_final_approach_xy).norm()
-
-            if now > self._reached_final_approach_time + self._final_approach_seconds:
-                self._finished = f"approached within {now - self._reached_final_approach_time}s, drove {length}m"
-
-        if not self._finished:
-            return False
-
-        return True
-
-    def end(self, interrupted: bool):
-        self._drivetrain.stop()
-        super().end(interrupted)
-
     def execute(self):
+        """
+        The main body of a command. Called repeatedly while the command is scheduled.
+        """
         now = Timer.getFPGATimestamp()
 
         # 0. look at the camera
@@ -339,6 +327,50 @@ class ApproachTag(BaseCommand):
 
         self._last_state = state
         self._last_warnings = warnings
+
+    def isFinished(self) -> bool:
+        """
+        Whether the command has finished. Once a command finishes, the scheduler will call its :meth:`commands2.Command.end`
+        method and un-schedule it.
+
+        :returns: whether the command has finished.
+        """
+        if self._finished:
+            return True
+
+        now = Timer.getFPGATimestamp()
+
+        # bad ways to finish
+        if self._lost_tag:
+            self._finished = self._lost_tag
+
+        elif now > self._last_seen_object_time + self._detection_timeout + self._final_approach_seconds:
+            delay = now - self._last_seen_object_time
+            self._finished = f"not seen {int(1000 * delay)}ms"
+
+        # good ways to finish
+        elif self._reached_final_approach_time != 0:
+            length = (self._drivetrain.pose.translation() - self._reached_final_approach_xy).norm()
+
+            if now > self._reached_final_approach_time + self._final_approach_seconds:
+                self._finished = f"approached within {now - self._reached_final_approach_time}s, drove {length}m"
+
+        if not self._finished:
+            return False
+
+        return True
+
+    def end(self, interrupted: bool):
+        """
+        The action to take when the command ends. Called when either the command finishes normally, or
+        when it interrupted/canceled.
+
+        Do not schedule commands here that share requirements with this command. Use :meth:`.andThen` instead.
+
+        :param interrupted: whether the command was interrupted/canceled
+        """
+        self._drivetrain.stop()
+        super().end(interrupted)
 
     def get_gyro_based_rotation_speed(self):
         # 1. how many degrees are left to turn?
@@ -475,15 +507,15 @@ class ApproachTag(BaseCommand):
 
     def update_vision(self, now):
         # non-sim logic:
-        if self._camera.hasDetection():
-            x = self._camera.getX()
-            a = self._camera.getA()
+        if self._camera.valid:
+            x_offset = self._camera.x_offest
+            area = self._camera.area
 
-            if x != 0 and a > 0:
-                self._last_seed_distance_to_tag = self.compute_tag_distance_from_tag_size_on_frame(a)
+            if x_offset != 0 and area > 0:
+                self._last_seed_distance_to_tag = self.compute_tag_distance_from_tag_size_on_frame(area)
                 self._last_seen_object_time = now
-                self._last_seed_object_size = a
-                self._last_seed_object_x = x
+                self._last_seed_object_size = area
+                self._last_seed_object_x = x_offset
 
                 if not self._ever_saw_object:
                     self._ever_saw_object = True
@@ -549,9 +581,10 @@ class ApproachManually(Command):
         :param camera_minimum_fps: what is the minimal number of **detected** frames per second expected from this camera
         """
         super().__init__()
-        assert hasattr(camera, "getX"), "camera must have `getX()` to give us the object coordinate (in degrees)"
-        assert hasattr(camera, "getA"), "camera must have `getA()` to give us object size (in % of screen)"
-        assert hasattr(camera, "getSecondsSinceLastHeartbeat"), "camera must have a `getSecondsSinceLastHeartbeat()`"
+        assert hasattr(camera, "x_offset"), "camera must have `x_offset` to give us the object coordinate (in degrees)"
+        assert hasattr(camera, "area"), "camera must have `area` to give us object size (in % of screen)"
+        assert hasattr(camera,
+                       "get_seconds_since_last_heartbeat"), "camera must have a `get_seconds_since_last_heartbeat()`"
         assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
         self._drivetrain = drivetrain
@@ -590,7 +623,7 @@ class ApproachManually(Command):
         self.initTunables(settings, dashboard_name)
 
     def isReady(self, minRequiredObjectSize=0.3):
-        return self.camera.hasDetection() and self.camera.getA() > minRequiredObjectSize
+        return self.camera.valid() and self.camera.getA() > minRequiredObjectSize
 
     def initTunables(self, settings, prefix):
         self.KPMULT_TRANSLATION = Tunable(settings, prefix, "GainTran", 0.6, (0.1, 8.0))  # gain for how quickly to move
@@ -741,7 +774,7 @@ class ApproachManually(Command):
         # note: Arducam w OV9281 (and Limelight 3 / 4) is 0.57 sq radians (not 1.33)
 
     def update_vision(self, now):
-        if self.camera.hasDetection():
+        if self.camera.valid():
             x = self.camera.getX()
             a = self.camera.getA()
 

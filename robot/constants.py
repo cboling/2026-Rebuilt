@@ -163,8 +163,8 @@ FRONT_CAMERA_INFO = {
 }
 
 REAR_CAMERA_INFO = {
-    "Type"   : CAMERA_TYPE_NONE,
-    "Label": "CAMERA_TYPE_PHOTONVISION",
+    "Type" : CAMERA_TYPE_PHOTONVISION,
+    "Label": "rear",
     "Name"   : "",
     "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
     "Heading": Rotation2d.fromDegrees(180.0),

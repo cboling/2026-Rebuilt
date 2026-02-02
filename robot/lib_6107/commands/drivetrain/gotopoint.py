@@ -14,7 +14,7 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
-# From Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
+# Adapted from Gene Panov's (Team 714) CommandRevSwerve project (and FRC Python videos)
 #
 # Copyright (c) FIRST and other WPILib contributors.
 # Open Source Software; you can modify and/or share it under the terms of
@@ -28,6 +28,7 @@ from commands2 import Command
 from pathplannerlib.auto import NamedCommands
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d, Translation2d
+from wpimath.units import degrees
 
 from constants import MAX_SPEED
 from lib_6107.commands.command import BaseCommand
@@ -46,6 +47,14 @@ class GoToPointConstants:
 
 
 class GoToPoint(BaseCommand):
+    """
+    Go to a specific point on the field.
+
+    TODO: Add field limitations to limit x & y and calculate in robot size
+    TODO: Add pathplanner support (optional) and have pathplanner determine the path to take
+    """
+    name = "GoToPoint"
+
     def __init__(self, drivetrain: DriveSubsystem,
                  x: Optional[int | float] = 0,
                  y: Optional[int | float] = 0,
@@ -65,7 +74,7 @@ class GoToPoint(BaseCommand):
 
         self._target_position = Translation2d(x, y)
         self._initial_position = None
-        self._speed = speed
+        self._speed = min(1.0, max(0.0, speed))
         self._stop = slow_down_at_finish
         self._desired_end_direction = None
         self._initial_distance = None
@@ -89,6 +98,9 @@ class GoToPoint(BaseCommand):
         NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
 
     def initialize(self):
+        """
+        Called just before this Command runs the first time
+        """
         super().initialize()
 
         self._initial_position = self._drivetrain.pose.translation()
@@ -106,6 +118,9 @@ class GoToPoint(BaseCommand):
         self._pointing_in_good_direction = False
 
     def execute(self):
+        """
+        The main body of a command. Called repeatedly while the command is scheduled.
+        """
         # 1. to which direction we should be pointing?
         current_pose = self._drivetrain.pose
         current_direction = current_pose.rotation()
@@ -188,11 +203,13 @@ class GoToPoint(BaseCommand):
         else:  # otherwise, use positive
             self._drivetrain.arcade_drive(translate_speed, +rotate_speed)
 
-    def end(self, interrupted: bool):
-        self._drivetrain.stop()
-        super().end(interrupted)
-
     def isFinished(self) -> bool:
+        """
+        Whether the command has finished. Once a command finishes, the scheduler will call its :meth:`commands2.Command.end`
+        method and un-schedule it.
+
+        :returns: whether the command has finished.
+        """
         # 1. did we reach the point where we must move very slow?
         current_pose = self._drivetrain.pose
         current_position = current_pose.translation()
@@ -222,14 +239,27 @@ class GoToPoint(BaseCommand):
 
         return False
 
+    def end(self, interrupted: bool) -> None:
+        """
+        The action to take when the command ends. Called when either the command finishes normally, or
+        when it interrupted/canceled.
+
+        Do not schedule commands here that share requirements with this command. Use :meth:`.andThen` instead.
+
+        :param interrupted: whether the command was interrupted/canceled
+        """
+        self._drivetrain.stop()
+        super().end(interrupted)
+
+
     REVERSE_DIRECTION = Rotation2d.fromDegrees(180)
 
 
-def _optimize(degrees):
-    while degrees > 180:  # for example, if we have 350 degrees to turn left, we probably want -10 degrees right
-        degrees -= 360
+def _optimize(deg) -> degrees:
+    while deg > 180:  # for example, if we have 350 degrees to turn left, we probably want -10 degrees right
+        deg -= 360
 
-    while degrees < -180:  # for example, if we have -350 degrees to turn right, we probably want +10 degrees left
-        degrees += 360
+    while deg < -180:  # for example, if we have -350 degrees to turn right, we probably want +10 degrees left
+        deg += 360
 
-    return degrees
+    return deg
