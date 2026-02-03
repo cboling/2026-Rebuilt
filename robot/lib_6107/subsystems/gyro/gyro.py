@@ -15,9 +15,10 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 import math
-from typing import Optional, Any
+from typing import Any, Optional
 
 from pyfrc.physics.core import PhysicsInterface
+from pykit.logger import Logger
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import degrees, degrees_per_second, hertz
@@ -160,6 +161,7 @@ class Gyro(GyroIO):
         Perform any periodic maintenance
         """
         self.updateInputs(inputs)
+        Logger.processInputs("Drive/Gyro", inputs)
 
     ######################
     # SmartDashboard support

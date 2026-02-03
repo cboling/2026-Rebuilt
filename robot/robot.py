@@ -22,12 +22,13 @@ import sys
 import time
 from typing import Optional
 
+import hal
 import wpilib
 from commands2 import CommandScheduler
 from commands2.command import Command
 from ntcore import NetworkTableInstance
 from pathplannerlib.pathfinding import LocalADStar, Pathfinding
-from wpilib import DriverStation, Field2d, RobotBase, SmartDashboard, Timer
+from wpilib import DriverStation, DSControlWord, Field2d, RobotBase, RobotController, SmartDashboard, Timer
 from wpimath.units import seconds
 
 import constants
@@ -42,15 +43,19 @@ if USE_PYKIT:
     from pykit.wpilog.wpilogwriter import WPILOGWriter
     from pykit.wpilog.wpilogreader import WPILOGReader
     from pykit.networktables.nt4Publisher import NT4Publisher
-    from pykit.loggedrobot import LoggedRobot as MyRobotBase
     from pykit.logger import Logger
-else:
-    from commands2 import TimedCommandRobot as MyRobotBase
+
+from commands2 import TimedCommandRobot as MyRobotBase
 
 from phoenix6 import HootAutoReplay
 
 # Setup Logging
 logger = logging.getLogger(__name__)
+
+
+def print_overrun_message(self):
+    """Prints a message when the main loop overruns."""
+    print("Loop overrun detected!")
 
 """
 The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -68,6 +73,27 @@ class MyRobot(MyRobotBase):
     def __init__(self):
         # Initialize our base class, choosing the default scheduler period
         super().__init__()
+
+        if USE_PYKIT:
+            # Pykit uses a class derived just from IterativeRobotBase which does
+            # not pull in any of the command / timed support. So add what we need
+            # for pykit here.
+            self.useTiming = True
+            self._periodUs = int(self.getPeriod() * 1000000)
+
+            # Because in "robotpy test" this code starts at time 0
+            # and hal.waitForNotifierAlarm returns (current_time_or_stopped, status)
+            # with current_time_or_stopped assigned to 0 when hal.stopNotifier is called
+            # or when the the current time is 0, and hal.stopNotifier is signal to
+            # exit the infinite loop, the stop is prematurely detected at time 0.
+            # Force the program to wait until self._periodUs for the first periodic loop
+            # so that current_time_or_stopped will contain a non-zero current time and the
+            # infinite loop does not end prematurely.
+            self._nextCycleUs = 0 + self._periodUs
+
+            self.notifier = hal.initializeNotifier()[0]
+            # self.watchdog = Watchdog(self.getPeriod(), self.printOverrunMessage)
+            self.word = DSControlWord()
 
         self._counter = 0  # Updated on each periodic call. Can be used to logging/smartdashboard updates
 
@@ -192,12 +218,36 @@ class MyRobot(MyRobotBase):
 
         logger.info("robotInit: exit")
 
+    def startCompetition(self) -> None:
+        """
+        The main loop of the robot.
+        Handles timing, logging, and calling the periodic functions.
+        This method replaces the standard `IterativeRobotBase.startCompetition`
+        to inject logging and precise timing control.
+        """
+        super().startCompetition()
+
+        if USE_PYKIT:
+            if self.isSimulation():
+                self._simulationInit()
+
+            init_end = RobotController.getFPGATime()
+            Logger.periodicAfterUser(init_end, 0)
+
+            hal.observeUserProgramStarting()
+
+            Logger.startReciever()
+
     def endCompetition(self):  # real signature unknown; restored from __doc__
         """
         endCompetition(self: wpilib._wpilib.TimedRobot) -> None
 
         Ends the main loop in StartCompetition().
         """
+        if USE_PYKIT:
+            hal.stopNotifier(self.notifier)
+            hal.cleanNotifier(self.notifier)
+
         print("========================================")
         print("Robot Statistics:")
         self._stats.print("all", 1)
@@ -216,10 +266,23 @@ class MyRobot(MyRobotBase):
         Default period is 20 mS.
         """
         start = time.monotonic()
+        # if USE_PYKIT:
+        #     # Run logger pre-user code (load inputs from log or sensors)
+        #     periodic_before_start = RobotController.getFPGATime()
+        #     Logger.periodicBeforeUser()
+        #     user_code_start = RobotController.getFPGATime()
+
         self._time_and_joystick_replay.update()
 
         self._counter += 1
         self._stats.add("periodic", time.monotonic() - start)
+
+        # if USE_PYKIT:
+        #     user_code_end = RobotController.getFPGATime()
+        #
+        #     # Run logger post-user code (save outputs to log)
+        #     Logger.periodicAfterUser(user_code_end - user_code_start, user_code_start -
+        #                              periodic_before_start)
 
     def disabledInit(self) -> None:
         """

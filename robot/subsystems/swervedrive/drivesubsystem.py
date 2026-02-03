@@ -554,10 +554,12 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             # TODO: Once we support PYKIT, add 'getPosition...' methods and decoreate them
             #       with the @autolog_output. See pykit example
             self.io.updateInputs(self._inputs)
-            self.gyroIO.updateInputs(self._gyroInputs)
-
             Logger.processInputs("Drive", self._inputs)
-            Logger.processInputs("Drive/Gyro", self._gyroInputs)
+
+            # Call into gyro explicitly since it is not a separate subsyste, but
+            # self.gyroIO.updateInputs(self._gyroInputs)   TODO: This is in Gyro subclass
+
+            # Logger.processInputs("Drive/Gyro", self._gyroInputs)
 
             if self._gyroInputs.connected:
                 self.rawGyroRotation = self._gyroInputs.yawPosition
@@ -679,9 +681,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
     def stop(self):
         if USE_PYKIT:
-            self.runOpenLoop(0, 0)
-        else:
-            self.arcade_drive(0, 0, field_relative=True)
+            pass  # TODO: self.runOpenLoop(0, 0)
+
+        self.arcade_drive(0, 0, field_relative=True)
 
     def arcade_drive(self, speed: meters_per_second, rot: radians_per_second, field_relative: Optional[bool] = False,
                      assume_manual_input: bool = False) -> None:
