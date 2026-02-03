@@ -28,7 +28,7 @@ from commands2 import CommandScheduler
 from commands2.command import Command
 from ntcore import NetworkTableInstance
 from pathplannerlib.pathfinding import LocalADStar, Pathfinding
-from wpilib import DriverStation, DSControlWord, Field2d, RobotBase, RobotController, SmartDashboard, Timer
+from wpilib import DriverStation, DSControlWord, Field2d, RobotBase, SmartDashboard, Timer
 from wpimath.units import seconds
 
 import constants
@@ -44,8 +44,9 @@ if USE_PYKIT:
     from pykit.wpilog.wpilogreader import WPILOGReader
     from pykit.networktables.nt4Publisher import NT4Publisher
     from pykit.logger import Logger
-
-from commands2 import TimedCommandRobot as MyRobotBase
+    from lib_6107.util.logged_timed_command_robot import LoggedTimedCommandRobot as MyRobotBase
+else:
+    from commands2 import TimedCommandRobot as MyRobotBase
 
 from phoenix6 import HootAutoReplay
 
@@ -218,41 +219,12 @@ class MyRobot(MyRobotBase):
 
         logger.info("robotInit: exit")
 
-    def startCompetition(self) -> None:
-        """
-        The main loop of the robot.
-        Handles timing, logging, and calling the periodic functions.
-        This method replaces the standard `IterativeRobotBase.startCompetition`
-        to inject logging and precise timing control.
-        """
-        super().startCompetition()
-
-        if USE_PYKIT:
-            if self.isSimulation():
-                self._simulationInit()
-
-            init_end = RobotController.getFPGATime()
-            Logger.periodicAfterUser(init_end, 0)
-
-            hal.observeUserProgramStarting()
-
-            Logger.startReciever()
-
     def endCompetition(self):  # real signature unknown; restored from __doc__
-        """
-        endCompetition(self: wpilib._wpilib.TimedRobot) -> None
-
-        Ends the main loop in StartCompetition().
-        """
-        if USE_PYKIT:
-            hal.stopNotifier(self.notifier)
-            hal.cleanNotifier(self.notifier)
-
         print("========================================")
         print("Robot Statistics:")
         self._stats.print("all", 1)
         print("========================================")
-        self._network_tables_instance.stopClient()
+        # self._network_tables_instance.stopClient()
 
     def robotPeriodic(self) -> None:
         """
@@ -266,23 +238,13 @@ class MyRobot(MyRobotBase):
         Default period is 20 mS.
         """
         start = time.monotonic()
-        # if USE_PYKIT:
-        #     # Run logger pre-user code (load inputs from log or sensors)
-        #     periodic_before_start = RobotController.getFPGATime()
-        #     Logger.periodicBeforeUser()
-        #     user_code_start = RobotController.getFPGATime()
+
+        super().robotPeriodic()
 
         self._time_and_joystick_replay.update()
 
         self._counter += 1
         self._stats.add("periodic", time.monotonic() - start)
-
-        # if USE_PYKIT:
-        #     user_code_end = RobotController.getFPGATime()
-        #
-        #     # Run logger post-user code (save outputs to log)
-        #     Logger.periodicAfterUser(user_code_end - user_code_start, user_code_start -
-        #                              periodic_before_start)
 
     def disabledInit(self) -> None:
         """
