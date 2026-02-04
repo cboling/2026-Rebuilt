@@ -21,12 +21,13 @@ robotpy-commands-v2     == 2026.2.1
 robotpy-pathplannerlib  == 2026.1.2
 robotpy-cli             == 2026.0.1
 phoenix6                == 26.1.1
+robotpy-rev             == 2026.0.1
 robotpy-cscore          == 2026.2.1
 pyntcore                == 2026.2.1
 certifi                 == 2026.1.4
 
 # Vision support
-photonlibpy             == 2026.1.1
+photonlibpy             == 2026.2.1
 limelightlib-python     == 0.9.6
 
 # AdvantageKit support

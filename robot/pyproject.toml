@@ -46,18 +46,18 @@ components = [
     "apriltag",
     "commands2",
     "cscore",
-    "navx",
+    "rev",
     "pathplannerlib",
     "phoenix6",
     "sim",
+    "pykit"
 ]
 
 # Other pip packages to install
 requires = [
-    "photonlibpy==2026.1.1",
+    "photonlibpy==2026.2.1",
     "limelightlib-python==0.9.6",
-    "pyntcore",
-    "robotpy-pykit==1.0.3"
+    "pyntcore"
 ]
 
 # List of paths to include

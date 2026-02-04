@@ -31,7 +31,7 @@ from wpimath.units import meters_per_second, radians_per_second, rotationsToRadi
 import constants
 from commands.autonomous import pathplanner
 from commands.swervedrive.point_towards_location import PointTowardsLocation
-from constants import FRONT_CAMERA_INFO, LEFT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO
+from constants import FRONT_CAMERA_INFO, LEFT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, DeviceID
 from field.field_2026 import RebuiltField as Field
 from generated.tuner_constants import TunerConstants
 from lib_6107.commands.camera.follow_object import FollowObject, StopWhen
@@ -42,6 +42,8 @@ from lib_6107.commands.drivetrain.trajectory import JerkyTrajectory, SwerveTraje
 from lib_6107.constants import DEFAULT_ROBOT_FREQUENCY
 from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem
 from lib_6107.util.phoenix6_telemetry import Telemetry
+
+from subsystems.shooter.rev_shooter import RevShooter as Shooter
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +95,19 @@ class RobotContainer:
         period = robot.getPeriod() or DEFAULT_ROBOT_FREQUENCY
 
         ##########################################
+        # Subsystem Initialization
+        #
+        # The robot core code will already call the periodic() function
+        # as needed, but having our own list (iterated in order) allows us to move much of
+        # the other subsystem 'tasks' into a generic loop.
+        self.subsystems: List[Subsystem] = []
+
+        ##########################################
         #  Drivetrain
         #
         # self.robot_drive = DriveSubsystem(self, **drive_kwargs)
         self.robot_drive = TunerConstants.create_drivetrain(self)
+        self.subsystems.append(self.robot_drive)
 
         ##########################################
         #   VISION
@@ -106,10 +117,12 @@ class RobotContainer:
         self._field: Field = Field()
 
         camera_subsystems = self._init_vision_subsystems()
+        self.subsystems.extend(camera_subsystems)
 
         ##########################################
         #   SHOOTER
         #
+        self.shooter = Shooter(self, DeviceID.SHOOTER_DEVICE_ID, False)
 
         ##########################################
         #   INTAKE
@@ -126,14 +139,6 @@ class RobotContainer:
         self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, self, "")
         self._auto_end_chooser = SendableChooser()
 
-        # Now save off our subsystems. The robot core code will already call the periodic() function
-        # as needed, but having our own list (iterated in order) allows us to move much of
-        # the other subsystem 'tasks' into a generic loop.
-
-        self.subsystems: List[Subsystem] = camera_subsystems + [
-            self.robot_drive,
-            # TODO: Intake, Climber, Shooter, Fuel Feeder here
-        ]
         ########################################################
         # Configure the button bindings
         for controller, is_driver in ((self.driver_controller, True),
@@ -415,10 +420,10 @@ class RobotContainer:
                 - Left
 
         LB == Left Bumper
-        RB == Right Bumper
+        RB == Right Bumper - Follow an april tag around the room
 
         LT == Left Trigger  - Keep robot shooter pointing toward our alliance hub (while pressed)
-        RT == Right Trigger - Follow an april tag around the room
+        RT == Right Trigger
 
         A == A Button (Bottom) -
         B == B Button (Right)  -
@@ -428,6 +433,23 @@ class RobotContainer:
         Start Button (three lines)  - Reset Gyro
         Back Button
         """
+        # Right trigger - Start the shooter
+        # TODO: Figure out our tolerances
+        # TODO: Adjust RPM higher. Start out slow so we cantest it
+        rpm = 120
+        tolerance = 40
+
+        controller.button(XboxController.Axis.kLeftTrigger).onTrue(
+            InstantCommand(lambda: self.shooter.set_velocity_goal(rpm, tolerance))
+        ).onFalse(
+            InstantCommand(lambda: self.shooter.stop())
+        )
+
+        track_any_tag = TrackTagCommand(self.robot_drive, self._cameras["front"], 0)
+        right_bumper_pressed = controller.axisGreaterThan(XboxController.Axis.kRightTrigger,
+                                                           threshold=0.5)
+        right_bumper_pressed.whileTrue(track_any_tag)
+
         # Left trigger - create a command for keeping the robot nose pointed towards the hub
         keep_pointing_towards_hub = PointTowardsLocation(self.robot_drive,
                                                          self._field.hub_location(False),
@@ -439,11 +461,11 @@ class RobotContainer:
         # connect the command to its trigger
         when_left_trigger_pressed.whileTrue(keep_pointing_towards_hub)
 
-        # Right trigger - track an apriltag around the room
+        # Right bumper - track an apriltag around the room
         track_any_tag = TrackTagCommand(self.robot_drive, self._cameras["front"], 0)
-        right_trigger_pressed = controller.axisGreaterThan(XboxController.Axis.kRightTrigger,
+        right_bumper_pressed = controller.axisGreaterThan(XboxController.Axis.kRightTrigger,
                                                            threshold=0.5)
-        right_trigger_pressed.whileTrue(track_any_tag)
+        right_bumper_pressed.whileTrue(track_any_tag)
 
     def configure_button_bindings_joystick(self, controller, is_driver: bool) -> None:
         """
