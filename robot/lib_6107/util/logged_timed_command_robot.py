@@ -16,81 +16,11 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
-from typing import Optional
-
-import hal
-from commands2 import Subsystem
 from commands2 import TimedCommandRobot
-# pykit & AdvantageScope support
+
 from pykit.logger import Logger
+
 from wpilib import DSControlWord, RobotController
-from wpilib import Watchdog
-
-
-# from util.telemetry import Telemetry
-
-
-class LoggerSubsystem(Subsystem):
-
-    def __init__(self, period: Optional[float] = None):
-        super().__init__()
-
-        self.use_timing = True
-        self.notifier = hal.initializeNotifier()[0]
-        self.watchdog = Watchdog(period, self.print_overrun_message)
-        self.word = DSControlWord()
-        self.user_code_start = 0
-        self.periodic_before_start = 0
-
-    def print_overrun_message(self):
-        """Prints a message when the main loop overruns."""
-        print("Loop overrun detected!")
-
-    def periodic(self) -> None:
-        pass
-
-    def startCompetition(self) -> None:
-        """
-        The main loop of the robot.
-        Handles timing, logging, and calling the periodic functions.
-        This method replaces the standard `IterativeRobotBase.startCompetition`
-        to inject logging and precise timing control.
-        """
-        init_end = RobotController.getFPGATime()
-        Logger.periodicAfterUser(init_end, 0)
-
-        hal.observeUserProgramStarting()
-
-        Logger.startReciever()
-
-    def endCompetition(self) -> None:
-        """
-        Called at the end of the competition to clean up resources.
-        """
-        hal.stopNotifier(self.notifier)
-        hal.cleanNotifier(self.notifier)
-
-    def robotPeriodic(self):
-        # Run logger pre-user code (load inputs from log or sensors).  This is called
-        # from the base class 'startCompetition' loop at the start of cycle.
-
-        self.periodic_before_start = RobotController.getFPGATime()
-        Logger.periodicBeforeUser()
-
-        # Execute user periodic code and measure timing
-        self.user_code_start = RobotController.getFPGATime()
-
-    def endOfLoop(self):
-        """
-        Loop function from the Iterative Robot base.  Call after remaining user code to
-        compute the differences
-        """
-        user_code_end = RobotController.getFPGATime()
-
-        # Run logger post-user code (save outputs to log)
-        Logger.periodicAfterUser(user_code_end - self.user_code_start,
-                                 self.user_code_start -
-                                 self.periodic_before_start)
 
 
 class LoggedTimedCommandRobot(TimedCommandRobot):
@@ -98,54 +28,172 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
     Provides a wpilib TimedCommandRobot with pykit logging capabilities.
 
     This class can be used as your MyRobot base if you need a Timed robot with
-    both Commandsv2 and pykit (AdvantageScope) support.
+    both Commands2 and pykit (AdvantageScope) support.
 
     Since pykit's LoggedRobot does not support specifying the default period in
     the initializer, we will not support that either at this time.
     """
-    default_period = 0.02  # seconds
+    kDefaultPeriod = TimedCommandRobot.kDefaultPeriod  # microseconds
+    default_period = kDefaultPeriod / 1000  # seconds
 
     def __init__(self):
         """
         Constructor for the LoggedTimedCommandRobot.
         Initializes the robot, sets up the logger, and creates I/O objects.
         """
+        self._greatest_period = self.getPeriod()
+        self._greatest_offset = 0
+
         super().__init__(period=self.default_period)
-        self._logger_subsystem = LoggerSubsystem(self.getPeriod())
 
-    def endCompetition(self) -> None:
-        """
-        Called at the end of the competition to clean up resources.
-        """
-        self._logger_subsystem.endCompetition()
-        super().endCompetition()
+        self._period_started = False
 
-    def startCompetition(self) -> None:
-        """
-        The main loop of the robot.
-        Handles timing, logging, and calling the periodic functions.
-        This method replaces the standard `IterativeRobotBase.startCompetition`
-        to inject logging and precise timing control.
-        """
-        self._logger_subsystem.startCompetition()
+        self.use_timing = True
+        self.word = DSControlWord()
+        self.user_code_start = 0
+        self.periodic_before_start = 0
+        self.init_end = None
 
-        super().startCompetition()
-        pass
+    # def startCompetition(self) -> None:
+    #
+    #     super().startCompetition()
+
+    # @tracer.start_as_current_span("robotInit")
+    def robotInit(self) -> None:
+        super().robotInit()
+        self.pykit_startup_steps()
+
+    def pykit_startup_steps(self) -> None:
+        self.init_end = RobotController.getFPGATime()
+        Logger.periodicAfterUser(self.init_end, 0)
+
+        # First to run is just before the '_loopFunc'. Schedule it a microsecond before
+        # the loop so it will be first in the priority queue
+        # super().addPeriodic(self._start_of_loop_func, self.getPeriod() - 1,.999999)
+        # super().addPeriodic(self._start_of_loop_func, self.getPeriod() ,0)
+
+        # Add our end-of-loop function to callbacks
+        super().addPeriodic(self._end_of_loop_func, self._greatest_period,
+                            self._greatest_offset + 1)
+
+        # Technically, pykit calls hal.observeUserProgramStarting() here, but we need to
+        # let the base class do that. Pykit then started the receiver which I guess we need
+        # to do right now.
+        Logger.startReciever()
+
+    def addPeriodic(self, callback, *args, **kwargs):  # real signature unknown; NOTE: unreliably restored from __doc__
+        """
+        addPeriodic(self: wpilib._wpilib.TimedRobot, callback: collections.abc.Callable[[], None], period: wpimath.units.seconds, offset: wpimath.units.seconds = 0.0) -> None
+
+        We override this class to track any callbacks that get added. We need to scheduler our own
+        'end-of-loop' callback to run last
+
+        :param callback: The callback to run.
+        :param period:   The period at which to run the callback.
+        :param offset:   The offset from the common starting time. This is useful
+                         for scheduling a callback in a different timeslot relative
+                         to TimedRobot.
+        """
+        arg_cnt = 0
+        if 'period' in kwargs:
+            period = kwargs['period']
+        else:
+            period = args[arg_cnt]
+            arg_cnt += 1
+
+        offset = kwargs['offset'] if 'offset' in kwargs else args[arg_cnt]
+
+        if period >= self._greatest_period and offset > self._greatest_offset:
+            self._greatest_period, self._greatest_offset = period, offset
+
+        # Call into the base class to finish
+        super().addPeriodic(callback, *args, **kwargs)
+
+    def disabledInit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().disabledInit()
+
+    def disabledPeriodic(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().disabledPeriodic()
+
+    def disabledExit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().disabledExit()
+
+    def autonomousInit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().autonomousInit()
+
+    def autonomousPeriodic(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().autonomousPeriodic()
+
+    def autonomousExit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().autonomousExit()
+
+    def teleopInit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().teleopInit()
+
+    def teleopPeriodic(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().teleopPeriodic()
+
+    def teleopExit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().teleopExit()
+
+    def testInit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().testInit()
+
+    def testPeriodic(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().testPeriodic()
+
+    def testExit(self):
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
+        super().testExit()
 
     def robotPeriodic(self):
-        # Run logger pre-user code (load inputs from log or sensors).  This is called
-        # from the base class 'startCompetition' loop at the start of cycle.
-        self._logger_subsystem.robotPeriodic()
-
+        # The following insures we start up the logging for this next loop, but only once
+        self._start_of_loop_func()
         super().robotPeriodic()
 
-    def _loopFunc(self):
+    def _start_of_loop_func(self):
+        if not self._period_started:
+            self._period_started = True
+            self._start_of_loop_func()
+
+            self.periodic_before_start = self.getLoopStartTime() or RobotController.getFPGATime()
+            Logger.periodicBeforeUser()
+
+            # Execute user periodic code and measure timing
+            self.user_code_start = RobotController.getFPGATime()
+
+    def _end_of_loop_func(self):
         """
         Loop function from the Iterative Robot base.  Call all remaining user code and then
         compute the differences
         """
-        pass
+        # Close out the iterative robot base iteration with logger
+        user_code_end = RobotController.getFPGATime()
 
-        super()._loopFunc()
-
-        self._logger_subsystem.endOfLoop()
+        # Run logger post-user code (save outputs to log)
+        Logger.periodicAfterUser(user_code_end - self.user_code_start,
+                                 self.user_code_start - self.periodic_before_start)
+        self._period_started = False

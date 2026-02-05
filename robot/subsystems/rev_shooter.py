@@ -16,7 +16,7 @@
 # ------------------------------------------------------------------------ #
 
 from commands2 import Subsystem
-from rev import SparkBaseConfig, SparkBase, SparkMax, ResetMode, PersistMode
+from rev import PersistMode, ResetMode, SparkBase, SparkBaseConfig, SparkMax
 from wpilib import SmartDashboard
 from wpimath.units import revolutions_per_minute
 

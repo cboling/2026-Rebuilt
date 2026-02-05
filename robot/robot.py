@@ -22,13 +22,12 @@ import sys
 import time
 from typing import Optional
 
-import hal
 import wpilib
 from commands2 import CommandScheduler
 from commands2.command import Command
 from ntcore import NetworkTableInstance
 from pathplannerlib.pathfinding import LocalADStar, Pathfinding
-from wpilib import DriverStation, DSControlWord, Field2d, RobotBase, SmartDashboard, Timer
+from wpilib import DriverStation, Field2d, RobotBase, SmartDashboard, Timer
 from wpimath.units import seconds
 
 import constants
@@ -75,27 +74,6 @@ class MyRobot(MyRobotBase):
         # Initialize our base class, choosing the default scheduler period
         super().__init__()
 
-        if USE_PYKIT:
-            # Pykit uses a class derived just from IterativeRobotBase which does
-            # not pull in any of the command / timed support. So add what we need
-            # for pykit here.
-            self.useTiming = True
-            self._periodUs = int(self.getPeriod() * 1000000)
-
-            # Because in "robotpy test" this code starts at time 0
-            # and hal.waitForNotifierAlarm returns (current_time_or_stopped, status)
-            # with current_time_or_stopped assigned to 0 when hal.stopNotifier is called
-            # or when the the current time is 0, and hal.stopNotifier is signal to
-            # exit the infinite loop, the stop is prematurely detected at time 0.
-            # Force the program to wait until self._periodUs for the first periodic loop
-            # so that current_time_or_stopped will contain a non-zero current time and the
-            # infinite loop does not end prematurely.
-            self._nextCycleUs = 0 + self._periodUs
-
-            self.notifier = hal.initializeNotifier()[0]
-            # self.watchdog = Watchdog(self.getPeriod(), self.printOverrunMessage)
-            self.word = DSControlWord()
-
         self._counter = 0  # Updated on each periodic call. Can be used to logging/smartdashboard updates
 
         self._container: Optional[RobotContainer] = None
@@ -129,6 +107,8 @@ class MyRobot(MyRobotBase):
         initialization code.
         """
         logger.info("robotInit: entry")
+
+        super().robotInit()
 
         # TODO: Following is not needed by the robot during competition or in
         #       simulation. Only if we are connecting another client (dashboard,..)
@@ -254,6 +234,7 @@ class MyRobot(MyRobotBase):
         called each time the robot enters disabled mode.
         """
         logger.info("disabledInit: entry")
+        super().disabledInit()
 
         for subsystem in self.container.subsystems:
             if hasattr(subsystem, "stop") and callable(getattr(subsystem, "stop")):
@@ -272,6 +253,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in disabled
         mode.
         """
+        super().disabledPeriodic()
         start = time.monotonic()
         logger.debug("called disabledPeriodic")
 
@@ -293,6 +275,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for code which will be called each time
         the robot exits disabled mode.
         """
+        super().disabledExit()
         logger.info("*** disabledExit: entry")
         self.disabledTimer.stop()
         self.disabledTimer.reset()
@@ -304,6 +287,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for initialization code which will be
         called each time the robot enters autonomous mode.
         """
+        super().autonomousInit()
         logger.info("autonomousInit: entry")
 
         self.container.set_start_time()
@@ -330,6 +314,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in
         autonomous mode.
         """
+        super().autonomousPeriodic()
         start = time.monotonic()
 
         if not self._auto_end_started:
@@ -356,6 +341,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for code which will be called each time
         the robot exits autonomous mode.
         """
+        super().autonomousExit()
         logger.info("autonomousExit: entry")
 
         if self._autonomous_command:
@@ -368,6 +354,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for initialization code which will be
         called each time the robot enters teleop mode.
         """
+        super().teleopInit()
         logger.debug("*** called teleopInit")
 
         self.container.set_start_time()
@@ -391,6 +378,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in teleop
         mode.
         """
+        super().teleopPeriodic()
         start = time.monotonic()
         pass
 
@@ -403,6 +391,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for code which will be called each time
         the robot exits teleop mode.
         """
+        super().teleopExit()
         for subsystem in self.container.subsystems:
             if hasattr(subsystem, "stop") and callable(getattr(subsystem, "stop")):
                 subsystem.stop()
@@ -416,6 +405,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for initialization code which will be
         called each time the robot enters test mode.
         """
+        super().testInit()
         logger.info("*** called testInit")
         CommandScheduler.getInstance().cancelAll()
 
@@ -427,6 +417,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in test
         mode.
         """
+        super().testPeriodic()
         logger.info("*** called testPeriodic")
         pass
 
@@ -437,6 +428,7 @@ class MyRobot(MyRobotBase):
         Users should override this method for code which will be called each time
         the robot exits test mode.
         """
+        super().testExit()
         logger.info("*** called testExit")
         pass
 
@@ -449,6 +441,7 @@ class MyRobot(MyRobotBase):
         started. It will be called exactly one time after RobotInit is called
         only when the robot is in simulation.
         """
+        super()._simulationInit()
         logger.info("*** _simulationInit: entry")
 
     def _simulationPeriodic(self):
@@ -457,4 +450,5 @@ class MyRobot(MyRobotBase):
 
         This function is called in a simulated robot after user code executes.
         """
+        super()._simulationPeriodic()
         logger.info("*** _simulationPeriodic: entry")
