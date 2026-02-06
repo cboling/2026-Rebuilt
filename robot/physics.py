@@ -28,13 +28,10 @@
 #
 # Examples can be found at https://github.com/robotpy/examples
 import inspect
-import json
 import logging
-import os
 import time
 
 from pyfrc.physics.core import PhysicsInterface
-from wpilib import getDeployDirectory
 
 from field.field_2026 import BLUE_TEST_POSE, RED_TEST_POSE
 from robot import MyRobot
@@ -80,20 +77,6 @@ class PhysicsEngine:
         robot.container.register_alliance_change_callback(self._alliance_change)
         self._alliance_change(self._robot.container.is_red_alliance,
                               self._robot.container.alliance_location)
-
-        # For field simulation
-        self._robot_x_width = 0.7  # About 2 inches and includes the bumpers
-        self._robot_y_width = 0.7
-        try:
-            path = os.path.join(getDeployDirectory(), 'pathplanner', 'settings.json')
-
-            with open(path, 'r') as f:
-                settings = json.loads(f.read())
-                self._robot_x_width = settings.get("robotWidth", self._robot_x_width)
-                self._robot_y_width = settings.get("robotWidth", self._robot_y_width)
-
-        except FileNotFoundError:
-            pass
 
         # TODO: If vision odometry is supported in simulation, this may need to be
         #       changed to the robot's field view and not the 'overhead' view of the

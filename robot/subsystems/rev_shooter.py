@@ -38,8 +38,8 @@ class RevShooter(Subsystem):
 
     """
     def __init__(self, container: 'RobotContainer', can_device_id: int, inverted: bool) -> None:
-
         super().__init__()
+        # TODO: add pykit io support
 
         self._container = container
         self._robot = container.robot
@@ -71,6 +71,13 @@ class RevShooter(Subsystem):
         config.closedLoop.outputRange(-1, +1)
         return config
 
+    def periodic(self) -> None:
+        # Update SmartDashboard for this subsystem at a rate slower than the period
+        counter = self._robot.counter
+        if counter % 100 == 0 or (self._robot.counter % 19 == 0 and
+                                  self._robot.isEnabled()):
+            self.dashboard_periodic()
+
     def dashboard_initialize(self) -> None:
         """
         Configure the SmartDashboard for this subsystem
@@ -81,12 +88,8 @@ class RevShooter(Subsystem):
         """
         Called from periodic function to update dashboard elements for this subsystem
         """
-        divisor = 10 if self._robot.isEnabled() else 20
-        update_dash = self._robot.counter % divisor == 0
-
-        if update_dash:
-            SmartDashboard.putNumber("Shooter/rpmGoal", self._velocity_goal)
-            SmartDashboard.putNumber("Shooter/rpmCurrent", self._current_rpm)
+        SmartDashboard.putNumber("Shooter/rpmGoal", self._velocity_goal)
+        SmartDashboard.putNumber("Shooter/rpmCurrent", self._current_rpm)
 
     @property
     def not_ready(self) -> str:

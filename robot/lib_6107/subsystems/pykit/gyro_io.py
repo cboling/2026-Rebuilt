@@ -15,10 +15,11 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from wpimath.units import radians
 
 from pykit.autolog import autolog
-from wpimath.geometry import Rotation2d
 
 
 class GyroIO:
@@ -26,8 +27,16 @@ class GyroIO:
     @dataclass
     class GyroIOInputs:
         connected: bool = False
-        yawPosition: Rotation2d = field(default_factory=lambda: Rotation2d())
-        yawVelocityDegPerSec: float = 0.0
+        yaw: radians = 0.0
+        yaw_rate: float = 0.0
 
     def updateInputs(self, inputs: GyroIOInputs) -> None:
         pass
+
+    def set_yaw(self, yaw_rad: radians) -> None:
+        """
+        Set the gyro yaw.
+
+        Args:
+            yaw_rad (float): The yaw in radians.
+        """

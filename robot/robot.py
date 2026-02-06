@@ -34,7 +34,6 @@ import constants
 from constants import USE_PYKIT
 from lib_6107.util.statistics import RobotStatistics
 from robotcontainer import RobotContainer
-# from util.telemetry import Telemetry
 from version import VERSION
 
 if USE_PYKIT:
@@ -46,8 +45,6 @@ if USE_PYKIT:
     from lib_6107.util.logged_timed_command_robot import LoggedTimedCommandRobot as MyRobotBase
 else:
     from commands2 import TimedCommandRobot as MyRobotBase
-
-from phoenix6 import HootAutoReplay
 
 # Setup Logging
 logger = logging.getLogger(__name__)
@@ -79,7 +76,6 @@ class MyRobot(MyRobotBase):
         self._container: Optional[RobotContainer] = None
         self._autonomous_command: Optional[Command] = None
         self._auto_end_started = False
-        self._time_and_joystick_replay = None
 
         self.disabledTimer: Timer = Timer()
 
@@ -110,26 +106,38 @@ class MyRobot(MyRobotBase):
 
         super().robotInit()
 
-        # TODO: Following is not needed by the robot during competition or in
-        #       simulation. Only if we are connecting another client (dashboard,..)
-        #       to the system.   Keeping code for now just in case.
-        # # Start up our network tables client and specify the server
-        # self._network_tables_instance.startClient4("team-6107-robot")
-        # if self._is_simulation:
-        #     self._network_tables_instance.setServer("localhost",
-        #                                             NetworkTableInstance.kDefaultPort4)
-        # else:
-        #     self._network_tables_instance.setServerTeam(6107)
-
         # Set up logging
+        self._logging_init()
+
+        version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        logger.info(f"Python: {version}, Software Version: {VERSION}")
+
+        # Set up our pathfinding algorithm
+        # TODO: LocalADStar has a dynamic obstacle field.
+        #       Can we use that in future with vision?
+        Pathfinding.setPathfinder(LocalADStar())
+
+        # Set up our playing field. May get overwritten if simulation is running or if we
+        # support vision based odometry
+        self.field = Field2d()
+        SmartDashboard.putData("Field", self.field)
+
+        # Instantiate our RobotContainer.  This will perform all our button bindings, and put our
+        # autonomous chooser on the dashboard.
+        self._container = RobotContainer(self)
+        self.disabledTimer = wpilib.Timer()
+
+        logger.info("robotInit: exit")
+
+    def _logging_init(self):
         if USE_PYKIT:
             Logger.recordMetadata("Robot", "Team6107-2026")
 
             match constants.ROBOT_MODE:
                 case constants.RobotModes.REAL:
-                    # TODO: logger.setLevel(logging.ERROR)
                     deploy_config = wpilib.deployinfo.getDeployData()
                     if deploy_config is not None:
+                        # TODO: Look into how this is used wrt pykit or AdvantageScope
                         Logger.recordMetadata("Deploy Host",
                                               deploy_config.get("deploy-host", ""))
                         Logger.recordMetadata("Deploy User",
@@ -147,13 +155,18 @@ class MyRobot(MyRobotBase):
                     Logger.addDataReciever(NT4Publisher(True))
                     Logger.addDataReciever(WPILOGWriter())
 
+                    logger.setLevel(logging.ERROR)  # Python logging
+
                 case constants.RobotModes.SIMULATION:
                     # TODO: logger.setLevel(logging.INFO)
+                    Logger.addDataReciever(WPILOGWriter())
                     Logger.addDataReciever(NT4Publisher(True))
                     DriverStation.silenceJoystickConnectionWarning(True)
 
+                    logger.setLevel(logging.INFO)  # Python logging
+
                 case constants.RobotModes.REPLAY:
-                    self.useTiming = False  # run as fast as possible
+                    self.use_timing = False  # run as fast as possible
                     log_path = os.environ["LOG_PATH"]
                     log_path = os.path.abspath(log_path)
 
@@ -162,7 +175,13 @@ class MyRobot(MyRobotBase):
                     Logger.setReplaySource(WPILOGReader(log_path))
                     Logger.addDataReciever(WPILOGWriter(log_path[:-7] + "_sim.wpilog"))
 
+                    logger.setLevel(logging.ERROR)  # Python logging
+
+            # Start up pykit/AdvantageScope logging
             Logger.start()
+
+            CommandScheduler.getInstance().setPeriod(1)  # 1s period for command scheduler wa
+
         else:
             if self._is_simulation:
                 logger.setLevel(logging.INFO)
@@ -175,29 +194,6 @@ class MyRobot(MyRobotBase):
 
             logging.getLogger("wpilib").setLevel(logging.DEBUG)
             logging.getLogger("commands2").setLevel(logging.DEBUG)
-
-            version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-            logger.info(f"Python: {version}, Software Version: {VERSION}")
-
-        # Set up our pathfinding algorithm
-        # TODO: LocalADStar has a dynamic obstacle field.
-        #       Can we use that in future with vision?
-        Pathfinding.setPathfinder(LocalADStar())
-
-        # Set up our playing field. May get overwritten if simulation is running or if we
-        # support vision based odometry
-        self.field = Field2d()
-        SmartDashboard.putData("Field", self.field)
-
-        # Instantiate our RobotContainer.  This will perform all our button bindings, and put our
-        # autonomous chooser on the dashboard.
-        self._container = RobotContainer(self)
-        self.disabledTimer = wpilib.Timer()
-
-        # log and replay timestamp and joystick data
-        self._time_and_joystick_replay = HootAutoReplay().with_timestamp_replay().with_joystick_replay()
-
-        logger.info("robotInit: exit")
 
     def endCompetition(self):  # real signature unknown; restored from __doc__
         print("========================================")
@@ -218,10 +214,23 @@ class MyRobot(MyRobotBase):
         Default period is 20 mS.
         """
         start = time.monotonic()
-
         super().robotPeriodic()
 
-        self._time_and_joystick_replay.update()
+        # if USE_PYKIT and False:
+        #     # This routine is called
+        #     from util.logtracer import LogTracer
+        #     from util.phoenixutil import PhoenixUtil
+        #
+        #     LogTracer.resetOuter("RobotPeriodic")
+        #     PhoenixUtil.updateSignals()               TODO: this is an optimization we may want
+        #     LogTracer.record("PhoenixUpdate")
+        #
+        #     self.container.robotPeriodic()
+        #
+        #     LogTracer.record("ContainerPeriodic")
+        #     CommandScheduler.getInstance().run()
+        #     LogTracer.record("CommandsPeriodic")
+        #     LogTracer.recordTotal()
 
         self._counter += 1
         self._stats.add("periodic", time.monotonic() - start)
@@ -431,24 +440,3 @@ class MyRobot(MyRobotBase):
         super().testExit()
         logger.info("*** called testExit")
         pass
-
-    def _simulationInit(self) -> None:
-        """
-        Robot-wide simulation initialization code should go here.
-
-        Users should override this method for default Robot-wide simulation
-        related initialization which will be called when the robot is first
-        started. It will be called exactly one time after RobotInit is called
-        only when the robot is in simulation.
-        """
-        super()._simulationInit()
-        logger.info("*** _simulationInit: entry")
-
-    def _simulationPeriodic(self):
-        """
-        Periodic simulation code should go here.
-
-        This function is called in a simulated robot after user code executes.
-        """
-        super()._simulationPeriodic()
-        logger.info("*** _simulationPeriodic: entry")

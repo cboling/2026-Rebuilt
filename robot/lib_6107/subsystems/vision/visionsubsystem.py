@@ -66,6 +66,7 @@ class VisionTargetData:
 class VisionSubsystem(Subsystem):
     def __init__(self, camera_name: str, field: Field, transform: Transform3d, drivetrain: 'DriveSubsystem'):
         super().__init__()
+        # TODO: Add pykit IO support
 
         # Load the initial field layout. This can be changed later at
         # the beginning of the Autonomous or Teleop periods
@@ -154,9 +155,6 @@ class VisionSubsystem(Subsystem):
         """
         Called from periodic function to update dashboard elements for this subsystem
         """
-        divisor = 10 if self._robot.isEnabled() else 20
-        update_dash = self._robot.counter % divisor == 0
-
-        # if update_dash:
-        #     SmartDashboard.putString('Camera/heartbeat', "Alive" if self.heartbeating else "Dead")
-        #     SmartDashboard.putNumber('Camera/last-heartbeat', self.lastHeartbeatTime)
+        pass
+        # SmartDashboard.putString('Camera/heartbeat', "Alive" if self.heartbeating else "Dead")
+        # SmartDashboard.putNumber('Camera/last-heartbeat', self.lastHeartbeatTime)

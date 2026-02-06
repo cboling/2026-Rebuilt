@@ -17,13 +17,14 @@
 import math
 from typing import Any, Optional
 
+from commands2 import Subsystem
 from pyfrc.physics.core import PhysicsInterface
-from pykit.logger import Logger
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import degrees, degrees_per_second, hertz
 
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
+from pykit.logger import Logger
 
 try:
     import navx
@@ -37,7 +38,8 @@ try:
 except ImportError:
     PIGEON2_SUPPORTED = False
 
-class Gyro(GyroIO):
+
+class Gyro(Subsystem, GyroIO):
     """
     Gyro is the base class for gyros on our system. Actual gyros are derived
     from this class.
@@ -45,12 +47,14 @@ class Gyro(GyroIO):
     gyro_type = "unknown"
 
     def __init__(self, is_reversed: bool) -> None:
-        super().__init__()
+        Subsystem.__init__(self)
+        GyroIO().__init__()
 
         self._gyro = None
         self._reversed = is_reversed
         self._sim_gyro: Optional[Gyro] = None
         self._physics_controller: Optional[PhysicsInterface] = None
+        self._inputs = GyroIO.GyroIOInputs()
 
     @property
     def gyro(self) -> Any:
@@ -156,12 +160,13 @@ class Gyro(GyroIO):
     def turn_rate_degrees_per_second(self) -> degrees_per_second:
         raise NotImplemented("Implement in derived class")
 
-    def periodic(self, inputs: GyroIO.GyroIOInputs) -> None:
+    def periodic(self) -> None:
         """
         Perform any periodic maintenance
         """
-        self.updateInputs(inputs)
-        Logger.processInputs("Drive/Gyro", inputs)
+        if self._inputs is not None:
+            self.updateInputs(self._inputs)
+            Logger.processInputs("Drive/Gyro", self._inputs)
 
     ######################
     # SmartDashboard support

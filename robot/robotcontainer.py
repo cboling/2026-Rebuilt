@@ -15,33 +15,36 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
+import json
 import logging
+import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from commands2 import button, cmd, Command, InstantCommand, PrintCommand, RunCommand, Subsystem
+from commands2 import button, cmd, Command, CommandScheduler, InstantCommand, PrintCommand, RunCommand, Subsystem
 from commands2.button import CommandXboxController, Trigger
 from commands2.sysid import SysIdRoutine
 from ntcore import NetworkTableInstance
+from phoenix6 import SignalLogger
 from phoenix6 import swerve
-from wpilib import DriverStation, Field2d, RobotBase, SendableChooser, SmartDashboard, XboxController
+from wpilib import DriverStation, Field2d, getDeployDirectory, LiveWindow, RobotBase, SendableChooser, \
+    SmartDashboard, XboxController
 from wpimath.geometry import Rotation2d
-from wpimath.units import meters_per_second, radians_per_second, rotationsToRadians
+from wpimath.units import meters, meters_per_second, radians_per_second, rotationsToRadians
 
 import constants
 from commands.autonomous import pathplanner
 from commands.swervedrive.point_towards_location import PointTowardsLocation
-from constants import DeviceID, FRONT_CAMERA_INFO, LEFT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO
+from constants import DeviceID, FRONT_CAMERA_INFO, LEFT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, \
+    ROBOT_X_WIDTH_DEFAULT, ROBOT_Y_WIDTH_DEFAULT
 from field.field_2026 import RebuiltField as Field
 from generated.tuner_constants import TunerConstants
-from lib_6107.commands.camera.follow_object import FollowObject, StopWhen
 from lib_6107.commands.camera.track_tag_command import TrackTagCommand
-from lib_6107.commands.drivetrain.arcade_drive import ArcadeDrive
 from lib_6107.commands.drivetrain.reset_xy import ResetXY
-from lib_6107.commands.drivetrain.trajectory import JerkyTrajectory, SwerveTrajectory
 from lib_6107.constants import DEFAULT_ROBOT_FREQUENCY
 from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem
 from lib_6107.util.phoenix6_telemetry import Telemetry
+from pykit.logger import Logger
 from subsystems.rev_shooter import RevShooter as Shooter
 
 logger = logging.getLogger(__name__)
@@ -66,7 +69,6 @@ class RobotContainer:
         # arcade_drive function, we apply any scale factor to limit speed
         self._max_speed: meters_per_second = constants.MAX_SPEED  # speed_at_12_volts desired top speed
         self._max_angular_rate: radians_per_second = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
-        self._logger = Telemetry(self._max_speed)
 
         # Alliance support
         self._is_red_alliance: bool = RobotBase.isSimulation()  # Coordinate system based off of blue being to the 'left'
@@ -136,11 +138,49 @@ class RobotContainer:
         #
 
         ##########################################
+        #   TELEMETRY
+        #
+        if constants.USE_PYKIT:
+            SignalLogger.enable_auto_logging(False)
+            LiveWindow.disableAllTelemetry()
+            self._logger = None
+
+            command_count: dict[str, int] = {}
+
+            def logCommandFunction(command: Command, active: bool) -> None:
+                name = command.getName()
+                count = command_count.get(name, 0) + (1 if active else -1)
+                command_count[name] = count
+                Logger.recordOutput(f"Commands/{name}", count > 0)
+
+            scheduler = CommandScheduler.getInstance()
+
+            scheduler.onCommandInitialize(lambda c: logCommandFunction(c, True))
+            scheduler.onCommandFinish(lambda c: logCommandFunction(c, False))
+            scheduler.onCommandInterrupt(lambda c: logCommandFunction(c, False))
+        else:
+            self._logger = Telemetry(self._max_speed)
+
+        ##########################################
         #   PathPlanner.  Do this last since it may pull in commands that need the previously
         #                 initialized subsystems.
         # Init the Auto chooser.  PathPlanner init will fill in our choices
         self._auto_chooser = pathplanner.configure_auto_builder(self.robot_drive, self, "")
         self._auto_end_chooser = SendableChooser()
+
+        self._robot_x_width: meters = ROBOT_X_WIDTH_DEFAULT
+        self._robot_y_width: meters = ROBOT_Y_WIDTH_DEFAULT
+
+        try:
+            path = os.path.join(getDeployDirectory(), 'pathplanner', 'settings.json')
+
+            with open(path, 'r') as f:
+                settings = json.loads(f.read())
+                self._robot_x_width = settings.get("robotWidth", self._robot_x_width)
+                self._robot_y_width = settings.get("robotWidth", self._robot_y_width)
+
+        except FileNotFoundError:
+            pass
 
         ########################################################
         # Configure the button bindings
@@ -154,8 +194,9 @@ class RobotContainer:
         # Configure the additional autos that do not come from pathplanner
         self.configure_additional_autos()
 
-        # Register telemetry support
-        self.robot_drive.register_telemetry(lambda state: self._logger.telemeterize(state))
+        # Register telemetry support if not running pykit/AdvantageScope
+        if self._logger is not None:
+            self.robot_drive.register_telemetry(lambda state: self._logger.telemeterize(state))
 
         # Speed limiter useful during initial development
         self._limit_chooser = None
@@ -206,6 +247,14 @@ class RobotContainer:
     @property
     def max_angular_rate(self) -> radians_per_second:
         return self._max_angular_rate * self.robot_drive.drive_scale_factor
+
+    @property
+    def robot_x_width(self) -> meters:
+        return self._robot_x_width
+
+    @property
+    def robot_y_width(self) -> meters:
+        return self._robot_y_width
 
     @property
     def field(self) -> Field2d:
@@ -483,7 +532,6 @@ class RobotContainer:
         #       above). Eventually need to abstract this.
 
     def _init_vision_subsystems(self) -> List[Subsystem]:
-
         camera_subsystems = []
 
         for camera_info in (FRONT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, LEFT_CAMERA_INFO):
@@ -543,9 +591,6 @@ class RobotContainer:
         TODO:  THIS IS JUST A TEST.  USE PATHPLANNER FOR ALL AUTONOMOUS MODE PATHS
         """
         self._auto_chooser.setDefaultOption("Do nothing", self.get_do_nothing(stop=True))
-        self._auto_chooser.addOption("trajectory example", self.get_autonomous_trajectory_example())
-        self._auto_chooser.addOption("left blue", self.get_autonomous_left_blue())
-        self._auto_chooser.addOption("left red", self.get_autonomous_left_red())
 
         # Auto-started end-of-autonomous mode command (Climb the ladder 1 - Rung)
         self._auto_end_chooser.setDefaultOption("Do nothing", self.get_do_nothing(stop=False))
@@ -564,75 +609,18 @@ class RobotContainer:
 
         return PrintCommand("Do-Nothing Command")
 
-    def get_autonomous_left_blue(self) -> Command:
-        set_start_pose = ResetXY(self.robot_drive, x=0.783, y=6.686, heading=60)
-        drive_forward = RunCommand(lambda: self.robot_drive.arcade_drive(dpeed=1.0, rot=0.0), self.robot_drive)
-        stop = InstantCommand(lambda: self.robot_drive.stop())
-
-        command = set_start_pose.andThen(drive_forward.withTimeout(1.0)).andThen(stop)
-        return command
-
-    def get_autonomous_left_red(self) -> Command:
-        setStartPose = ResetXY(self.robot_drive, x=15.777, y=4.431, heading=-120)
-        driveForward = RunCommand(lambda: self.robot_drive.arcade_drive(1.0, 0.0), self.robot_drive)
-        stop = InstantCommand(lambda: self.robot_drive.stop())
-
-        command = setStartPose.andThen(driveForward.withTimeout(2.0)).andThen(stop)
-        return command
-
-    def get_approach_tag_command(self) -> Command:
-        # Approach until the tag takes up 8% of the screen, then drive just a little bit more
-        # to compress the robot against the wall the tag is on.
-
-        set_start_pose = ResetXY(self.robot_drive, x=8.7, y=7.3, heading=-180)
-        trajectory = JerkyTrajectory(self.robot_drive,
-                                     endpoint=(2.59, 3.99, 0),
-                                     waypoints=[
-                                         (0.775, 7.26, 180),
-                                         (6.5, 7.26, -178),
-                                         (3.6, 7.1, -175),
-                                         (2.17, 5.5, -101)
-                                     ],
-                                     speed=0.2)  # TODO: Increase speed once we know it works as expected
-
-        follow_tag = FollowObject(self.robot_drive, self.front_camera,
-                                  stepSeconds=0.33,
-                                  stopWhen=StopWhen(maxSize=8.0),
-                                  speed=0.2)  # TODO: Increase speed once we know it works as expected
-
-        drive_forward = ArcadeDrive(self.robot_drive, drive_speed=0.15, rotation_speed=0.0).withTimeout(0.3)  # Keep speed low here..
-
-        return set_start_pose.andThen(trajectory).andThen(follow_tag).andThen(drive_forward)
-
-    def get_autonomous_trajectory_example(self) -> Command:
-        command = SwerveTrajectory(self.robot_drive,
-                                   speed=+1.0,
-                                   waypoints=[
-                                       (1.0, 4.0, 0.0),  # start at x=1.0, y=4.0, heading=0 degrees (North)
-                                       (2.5, 5.0, 0.0),  # next waypoint: x=2.5, y=5.0
-                                       (3.0, 6.5, 0.0),  # next waypoint
-                                       (6.5, 5.0, -90),  # next waypoint
-                                   ],
-                                   endpoint=(6.0, 4.0, -180),  # end point: x=6.0, y=4.0, heading=180 degrees (South)
-                                   flipIfRed=False,  # if you want the trajectory to flip when team is red, set =True
-                                   stopAtEnd=True)  # to keep driving onto next command, set =False
-        return command
-
-    def get_test_command(self) -> Optional[Command]:
-        """
-        :returns: the command to run in test mode ("test dance") to exercise all subsystems
-        """
-        from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
-
-        # example commands that test drivetrain's motors and gyro (our only subsystem)
-        turn_right = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(-45), turn_speed=0.25)
-        turn_left = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(45), turn_speed=0.25)
-        back_to_zero = AimToDirection(self.robot_drive, heading=Rotation2d.fromDegrees(0), turn_speed=0.0)
-
-        command = turn_right.andThen(turn_left).andThen(back_to_zero)
-        return command
-
     def initialize_dashboard(self):
         logger.debug("*** called initialize_dashboard")
 
+    def robotPeriodic(self) -> None:
 
+        pass
+        # RobotState.periodic(self.robot_drive.getRawRotation(),
+        #                     RobotController.getFPGATime() / 1e6,
+        #                     self.robot_drive.getAngularVelocity(),
+        #                     self.robot_drive.getFieldRelativeSpeeds(),
+        #                     self.robot_drive.getModulePositions())
+        #                     #Rotation2d(Timer.getTimestamp() / 20))  # Simulated turret rotation, just go spin
+        #
+        # self.updateAlerts()
+        # # Logger.recordOutput("Component Poses", RobotMechanism.getPoses())

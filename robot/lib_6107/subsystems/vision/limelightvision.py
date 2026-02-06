@@ -187,7 +187,11 @@ try:
 
             self._heart_beating = heart_beating
 
-            # self.dashboard_periodic()
+            # Update SmartDashboard for this subsystem at a rate slower than the period
+            counter = self._robot.counter
+            if counter % 100 == 0 or (self._robot.counter % 15 == 0 and
+                                      self._robot.isEnabled()):
+                self.dashboard_periodic()
 
         def simulationPeriodic(self):
             super().simulationPeriodic()

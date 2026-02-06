@@ -52,6 +52,11 @@ ROBOT_MASS: kilograms = lbsToKilograms(148 - 20.3)  # 32lbs * kg per pound
 # CHASSIS    = Matter(geometry.Translation3d(0, 0, units.inchesToMeters(8)), ROBOT_MASS)        TODO: Figure this out
 LOOP_TIME = 0.13  # seconds, 20ms + 110ms sprk max velocity lag
 
+# Robot size (including bumpers). Defaults, use PathPlanner to set actual value to
+#                                 use if PathPlanner is supported
+ROBOT_X_WIDTH_DEFAULT: meters = 0.4
+ROBOT_Y_WIDTH_DEFAULT: meters = 0.4
+
 ###############################################################################
 # Device CAN bus IDs
 DRIVER_CONTROLLER_PORT = 0

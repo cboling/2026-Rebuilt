@@ -22,11 +22,9 @@ from phoenix6 import BaseStatusSignal, StatusCode
 from phoenix6.configs import Pigeon2Configuration
 from phoenix6.hardware import pigeon2
 from phoenix6.sim.pigeon2_sim_state import Pigeon2SimState
-from wpilib import SmartDashboard, RobotBase
-from wpimath.geometry import Rotation2d
-from wpimath.units import degrees, degrees_per_second, hertz
+from wpilib import RobotBase, SmartDashboard
+from wpimath.units import degrees, degrees_per_second, hertz, radians
 
-from lib_6107.constants import RADIANS_PER_DEGREE
 from lib_6107.subsystems.gyro.gyro import Gyro, GyroIO
 
 logger = logging.getLogger(__name__)
@@ -129,6 +127,10 @@ class Pigeon2(Gyro):
 
         return -yaw if self._reversed else yaw
 
+    @yaw.setter
+    def yaw(self, value: degrees) -> None:
+        self._gyro.set_yaw(value)
+
     @property
     def pitch(self) -> degrees:
         pitch_offset = 0  # TODO: Always zero?
@@ -162,20 +164,22 @@ class Pigeon2(Gyro):
 
         return -rate if self._reversed else rate
 
-    ######################
+    ########################################################################################
     # pykit / AdvantageScope support
 
     def updateInputs(self, inputs: GyroIO.GyroIOInputs) -> None:
-        inputs.connected = BaseStatusSignal.refresh_all(self._yaw,
-                                                        self._yaw_velocity).is_ok()
-        inputs.yawPosition = Rotation2d.fromDegrees(self._yaw.value_as_double)
-        inputs.yawVelocityDegPerSec = (self._yaw_velocity.value_as_double *
-                                       RADIANS_PER_DEGREE)
+        inputs.connected = BaseStatusSignal.is_all_good(self._yaw,
+                                                        self._yaw_velocity)
+        inputs.yaw = math.radians(self._yaw.value_as_double)
+        inputs.yaw_rate = math.radians(self._yaw_velocity.value_as_double)
 
-        self._yaw: BaseStatusSignal = self._gyro.get_yaw()
-        self._yaw_velocity = self._gyro.get_angular_velocity_z_world()
+    def set_yaw(self, yaw_rad: radians) -> None:
+        """
+        Set the gyro yaw.
+        """
+        self.yaw = math.degrees(yaw_rad)
 
-    ######################
+    ########################################################################################
     # SmartDashboard support
 
     def dashboard_initialize(self) -> None:
@@ -190,7 +194,7 @@ class Pigeon2(Gyro):
         # Pigeon has an all-good static to test if all is okay with the world
         SmartDashboard.putBoolean('Gyro/all-good', BaseStatusSignal.is_all_good())
 
-    ######################
+    ########################################################################################
     # Simulation support
 
     def sim_init(self, physics_controller: 'PhysicsInterface') -> None:

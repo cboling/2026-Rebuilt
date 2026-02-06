@@ -17,10 +17,9 @@
 # ------------------------------------------------------------------------ #
 
 from commands2 import TimedCommandRobot
+from wpilib import DSControlWord, RobotController
 
 from pykit.logger import Logger
-
-from wpilib import DSControlWord, RobotController
 
 
 class LoggedTimedCommandRobot(TimedCommandRobot):
@@ -48,17 +47,14 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
 
         self._period_started = False
 
+        # NOTE: When performing replay (RobotMode == REPLAY), set the following
+        #       self.use_timing to False
         self.use_timing = True
         self.word = DSControlWord()
         self.user_code_start = 0
         self.periodic_before_start = 0
         self.init_end = None
 
-    # def startCompetition(self) -> None:
-    #
-    #     super().startCompetition()
-
-    # @tracer.start_as_current_span("robotInit")
     def robotInit(self) -> None:
         super().robotInit()
         self.pykit_startup_steps()
@@ -66,11 +62,6 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
     def pykit_startup_steps(self) -> None:
         self.init_end = RobotController.getFPGATime()
         Logger.periodicAfterUser(self.init_end, 0)
-
-        # First to run is just before the '_loopFunc'. Schedule it a microsecond before
-        # the loop so it will be first in the priority queue
-        # super().addPeriodic(self._start_of_loop_func, self.getPeriod() - 1,.999999)
-        # super().addPeriodic(self._start_of_loop_func, self.getPeriod() ,0)
 
         # Add our end-of-loop function to callbacks
         super().addPeriodic(self._end_of_loop_func, self._greatest_period,
@@ -109,6 +100,17 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
         # Call into the base class to finish
         super().addPeriodic(callback, *args, **kwargs)
 
+    #################################################################################
+    #
+    # For the '*Init', '*Periodic', and '*Exit' functions below, these may be called
+    # from the IterativeRobot base. They could also be skipped.
+    #
+    # What I am trying to do here is enable the pykit logging as close as to the start
+    # of a loop as the pykit's Logged robot does.
+    #
+    # If we can get the C++ library in iterative robot base to expose a function we
+    # could attach to, then, we would not need all this 'mess'.
+    #
     def disabledInit(self):
         # The following insures we start up the logging for this next loop, but only once
         self._start_of_loop_func()
@@ -187,9 +189,15 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
 
     def _end_of_loop_func(self):
         """
-        Loop function from the Iterative Robot base.  Call all remaining user code and then
-        compute the differences
+        End of the periodk Loop function from the Iterative Robot base. This function is scheduled
+        to be the last function called by the CommandScheduler, so we know that all subsystems have
+        been updated an any new commands issued.
+
+
         """
+        ###############################################
+        # Now let's close out the pykit logging for this loop.
+        #
         # Close out the iterative robot base iteration with logger
         user_code_end = RobotController.getFPGATime()
 

@@ -15,10 +15,8 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
-import json
 import logging
 import math
-import os
 from collections import OrderedDict
 from typing import Callable
 from typing import List, Optional, Sequence, Tuple
@@ -27,12 +25,8 @@ from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger, swerve, units, utils
 from phoenix6.swerve.requests import FieldCentric, RobotCentric
-from phoenix6.swerve.swerve_module import SwerveModule
-from pykit.autolog import autolog_output, autologgable_output
-from pykit.logger import Logger
 from wpilib import DriverStation, Notifier, RobotController
 from wpilib import Field2d, RobotBase, SmartDashboard
-from wpilib import getDeployDirectory
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d
@@ -43,9 +37,10 @@ from constants import GYRO_REVERSED, JOYSTICK_DEADBAND, MAX_SPEED, USE_PYKIT, WH
 from field.field_2026 import BLUE_TEST_POSE, FIELD_X_SIZE, FIELD_Y_SIZE, RED_TEST_POSE
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
-from lib_6107.subsystems.pykit.gyro_io import GyroIO
-from lib_6107.subsystems.pykit.swervedrive_io import SwerveDriveIO
+from pykit.autolog import autolog_output, autologgable_output
+from pykit.logger import Logger
 from subsystems.swervedrive.constants import DriveConstants
+from subsystems.swervedrive.swervemodule import SwerveModule
 
 try:
     import navx
@@ -126,7 +121,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
     def __init__(self, consts, modules, container: 'RobotContainer') -> None:
 
-        # super().__init__(hardware.TalonFX, hardware.TalonFX, hardware.CANcoder, consts, modules)
         Subsystem.__init__(self)
         TunerSwerveDrivetrain.__init__(self, consts, modules)
 
@@ -146,10 +140,10 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # The modules are created in the following order in our tuner_constants 'create_drivetrain' func
         self._swerve_modules: OrderedDict[str, SwerveModule] = OrderedDict(
             [
-                ("front-left",  self.modules[0]),
-                ("front-right", self.modules[1]),
-                ("back-left",   self.modules[2]),
-                ("back-right",  self.modules[3])
+                ("front-left", SwerveModule(self.modules[0], "front-left")),
+                ("front-right", SwerveModule(self.modules[1], "front-right")),
+                ("back-left", SwerveModule(self.modules[2], "back-left")),
+                ("back-right", SwerveModule(self.modules[3], "back-right"))
             ])
 
         # Some useful requests amd constants
@@ -175,29 +169,12 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                                                  GYRO_REVERSED,
                                                  inst=self.pigeon2)
         self._gyro.initialize()
-        self._gyroInputs = GyroIO.GyroIOInputs()
 
         # TODO: Support slew rate and make adjustable. There is a parameter to 'drive()'
         #       called rate limit that currently uses the rotation & magnitude limiter
         # Slew rate filter variables and limiters for controlling lateral acceleration
         self.magLimiter = SlewRateLimiter(DriveConstants.MAGNITUDE_SLEW_RATE)
         self.rotLimiter = SlewRateLimiter(DriveConstants.ROTATIONAL_SLEW_RATE)
-
-        self._robot_x_width = 0.4
-        self._robot_y_width = 0.4
-        try:
-            path = os.path.join(getDeployDirectory(), 'pathplanner', 'settings.json')
-
-            with open(path, 'r') as f:
-                settings = json.loads(f.read())
-                self._robot_x_width = settings.get("robotWidth", self._robot_x_width)
-                self._robot_y_width = settings.get("robotWidth", self._robot_y_width)
-
-        except FileNotFoundError:
-            pass
-
-        # Pykit support
-        self._inputs = SwerveDriveIO.DriveIOInputs()
 
         # The next attributes are set depending on if vision is unsupported for tracking the robot pose
         self._network_table_inst = None
@@ -355,9 +332,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     def brake_request(self) -> swerve.requests.SwerveDriveBrake:
         return self._brake
 
-    def apply_request(
-            self, request: Callable[[], swerve.requests.SwerveRequest]
-    ) -> Command:
+    def apply_request(self, request: Callable[[], swerve.requests.SwerveRequest]) -> Command:
         """
         Returns a command that applies the specified control request to this swerve drivetrain.
 
@@ -511,26 +486,16 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         Configure the SmartDashboard for this subsystem
         """
         SmartDashboard.putData("Field", self.field)
-        self.gyro.dashboard_initialize()
 
     def dashboard_periodic(self) -> None:
         """
         Called from periodic function to update dashboard elements for this subsystem
         """
-        divisor = 10 if self._robot.isEnabled() else 20
-        update_dash = self._robot.counter % divisor == 0
-
-        if update_dash and self._last_pose is not None:
-            SmartDashboard.putNumber("Drivetrain/x", self._last_pose.x)
-            SmartDashboard.putNumber("Drivetrain/y", self._last_pose.y)
-            SmartDashboard.putNumber("Drivetrain/heading", self._last_pose.rotation().degrees())
-
-            self.gyro.dashboard_periodic()
+        SmartDashboard.putNumber("Drivetrain/x", self._last_pose.x)
+        SmartDashboard.putNumber("Drivetrain/y", self._last_pose.y)
+        SmartDashboard.putNumber("Drivetrain/heading", self._last_pose.rotation().degrees())
 
     def periodic(self) -> None:
-        enabled = self._robot.isEnabled()
-        log_it = self._robot.counter % 20 == 0 and enabled
-
         # Periodically try to apply the operator perspective.
         # If we haven't applied the operator perspective before, then we should apply it regardless of DS state.
         # This allows us to correct the perspective in case the robot code restarts mid-match.
@@ -546,37 +511,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 )
                 self._has_applied_operator_perspective = True
 
-        self.gyro.periodic(self._gyroInputs)
-
-        if USE_PYKIT:
-            # TODO: FOLLOWING was from differential drive. change to SwerveDrive support
-            #
-            # TODO: Once we support PYKIT, add 'getPosition...' methods and decoreate them
-            #       with the @autolog_output. See pykit example
-            self.io.updateInputs(self._inputs)
-            Logger.processInputs("Drive", self._inputs)
-
-            # Call into gyro explicitly since it is not a separate subsyste, but
-            # self.gyroIO.updateInputs(self._gyroInputs)   TODO: This is in Gyro subclass
-
-            # Logger.processInputs("Drive/Gyro", self._gyroInputs)
-
-            if self._gyroInputs.connected:
-                self.rawGyroRotation = self._gyroInputs.yawPosition
-            else:
-                twist = self.kinematics.toTwist2d(
-                    self.getLeftPosition() - self.lastLeftPosition,
-                    self.getRightPosition() - self.lastRightPosition,
-                )
-                self.rawGyroRotation = self.rawGyroRotation + Rotation2d(twist.dtheta)
-
-            self.lastLeftPosition = self.getLeftPosition()
-            self.lastRightPosition = self.getRightPosition()
-
-            self.poseEstimator.update(
-                self.rawGyroRotation, self.getLeftPosition(), self.getRightPosition()
-            )
-
         # Update the odometry in the periodic block
         # TODO: For pheonix6 library, just need to pass in vision measurements
         self._last_pose = self.pose
@@ -584,8 +518,17 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         if self._last_pose is not None:
             self.field.setRobotPose(self._last_pose)
 
-        # Update SmartDashboard for this subsystem
-        self.dashboard_periodic()
+        if USE_PYKIT:
+            for _label, module in self._swerve_modules.items():
+                module.updateInputs()
+
+            # TODO: Also need to Log the pose
+
+        # Update SmartDashboard for this subsystem at a rate slower than the period
+        counter = self._robot.counter
+        if counter % 100 == 0 or (self._robot.counter % 17 == 0 and
+                                  self._robot.isEnabled()):
+            self.dashboard_periodic()
 
     def sim_init(self, physics_controller: 'PhysicsInterface') -> None:
         """
@@ -618,16 +561,14 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # now, tm_diff = kwargs["now"], kwargs["tm_diff"]
         amperes_used = 0.0  # TODO: Support in future
 
-         # log_it = self._robot.counter % 20 == 0
-
         # Since simulation, limit it to the field of play.
         pose = self.pose
 
         # self.gyro.sim_yaw = pose.rotation().degrees()     # Not saving this yet.
 
         # Limit it to the field size (manually)
-        robot_x_offset = self._robot_x_width / 2
-        robot_y_offset = self._robot_y_width / 2
+        robot_x_offset = self.container.robot_x_width / 2
+        robot_y_offset = self.container.robot_y_width / 2
 
         x, y = pose.x, pose.y
 

@@ -22,7 +22,7 @@ from typing import Optional
 
 from commands2 import Subsystem
 from ntcore import NetworkTableInstance
-from wpilib import Timer, SmartDashboard
+from wpilib import SmartDashboard, Timer
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,11 @@ class PhotonVisionCamera(Subsystem):
 
         self.heartbeating = heartbeating
 
-        self.dashboard_periodic()
+        # Update SmartDashboard for this subsystem at a rate slower than the period
+        counter = self._robot.counter
+        if counter % 100 == 0 or (self._robot.counter % 21 == 0 and
+                                  self._robot.isEnabled()):
+            self.dashboard_periodic()
 
     def dashboard_initialize(self) -> None:
         """
@@ -118,9 +122,5 @@ class PhotonVisionCamera(Subsystem):
         """
         Called from periodic function to update dashboard elements for this subsystem
         """
-        divisor = 10 if self._robot.isEnabled() else 20
-        update_dash = self._robot.counter % divisor == 0
-
-        if update_dash:
-            SmartDashboard.putString('Camera/heartbeat', "Alive" if self.heartbeating else "Dead")
-            SmartDashboard.putNumber('Camera/last-heartbeat', self.lastHeartbeatTime)
+        SmartDashboard.putString('Camera/heartbeat', "Alive" if self.heartbeating else "Dead")
+        SmartDashboard.putNumber('Camera/last-heartbeat', self.lastHeartbeatTime)
