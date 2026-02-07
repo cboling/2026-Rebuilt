@@ -65,6 +65,8 @@ class Tunable:
 
 
 class ApproachTag(BaseCommand):
+
+    name = "ApproachTag"
     """
     Align the swerve robot to AprilTag precisely and then optionally slowly push it forward for a split second
     """
@@ -166,11 +168,11 @@ class ApproachTag(BaseCommand):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def command(**kwargs) -> Command:
+        def command(**kwargs) -> ApproachTag:
             return ApproachTag(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
+        NamedCommands.registerCommand(command().name, command())
 
     def is_ready(self, min_required_object_size = 0.3):
         return self._camera.valid and self._camera.area > min_required_object_size

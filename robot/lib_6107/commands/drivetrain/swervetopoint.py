@@ -80,11 +80,11 @@ class SwerveToPoint(BaseCommand):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def command(**kwargs) -> Command:
+        def command(**kwargs) -> SwerveToPoint:
             return SwerveToPoint(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
+        NamedCommands.registerCommand(command().name, command())
 
     def initialize(self) -> None:
         """
@@ -209,6 +209,8 @@ class SwerveToPoint(BaseCommand):
 
 
 class SwerveMove(BaseCommand):
+    name = "SwerveMove"
+
     def __init__(
             self,
             drivetrain: 'DriveSubsystem',
@@ -237,11 +239,11 @@ class SwerveMove(BaseCommand):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def command(**kwargs) -> Command:
+        def command(**kwargs) -> SwerveMove:
             return SwerveMove(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
+        NamedCommands.registerCommand(command().name, command())
 
     def initialize(self):
         """

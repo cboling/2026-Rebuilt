@@ -29,6 +29,8 @@ class IntakeCollectFuel(BaseCommand):  # change the name for your command
     Activates the intake to collect fuel and deactivates it on end. The
     'speed' parameter provides the voltage rate for the intake.
     """
+    name = "IntakeCollectFuel"
+
     def __init__(self, container, rpm: Optional[revolutions_per_minute] = 500):
         super().__init__(container)
 
@@ -41,11 +43,11 @@ class IntakeCollectFuel(BaseCommand):  # change the name for your command
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def command(**kwargs) -> Command:
+        def command(**kwargs) -> IntakeCollectFuel:
             return IntakeCollectFuel(container, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
+        NamedCommands.registerCommand(command().name, command())
 
     def initialize(self) -> None:
         """

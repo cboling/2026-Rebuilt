@@ -91,11 +91,11 @@ class GoToPoint(BaseCommand):
         This command factory can be used with register this command
         and make it available from within PathPlanner
         """
-        def command(**kwargs) -> Command:
+        def command(**kwargs) -> GoToPoint:
             return GoToPoint(drivetrain, **kwargs)
 
         # Register the function itself
-        NamedCommands.registerCommand(BaseCommand.get_class_name(), command())
+        NamedCommands.registerCommand(command().name, command())
 
     def initialize(self):
         """
