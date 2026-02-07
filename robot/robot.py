@@ -18,10 +18,10 @@
 
 import logging
 import os
-import sys
-import time
 from typing import Optional
 
+import sys
+import time
 import wpilib
 from commands2 import CommandScheduler
 from commands2.command import Command
@@ -151,13 +151,17 @@ class MyRobot(MyRobotBase):
         super().robotInit()
 
         if USE_PYKIT:
+            # Disable RoboRio auto-logging.  TODO: If we can put a thumbdrive in, may want as a backup
+            #                                      and we should enable this again and re-evaluate.
             SignalLogger.enable_auto_logging(False)
             LiveWindow.disableAllTelemetry()
+
             # TODO: make period smaller
             CommandScheduler.getInstance().setPeriod(0.5)  # 1/2s period for command scheduler wathdoc
 
             command_count: dict[str, int] = {}
 
+            # Tracks active commands.
             def logCommandFunction(command: Command, active: bool) -> None:
                 name = command.getName()
                 count = command_count.get(name, 0) + (1 if active else -1)

@@ -1,5 +1,3 @@
-
-
 #  Follows WestWood 2026 startup.  Starting with 'sim'
 
 Startup:
@@ -18,14 +16,60 @@ Startup:
                     sets lots of initial values
 
                     if simulation.
-                        creats a sim VelocityGetter. (NetworkTable subcription)   ***
+                        creates a sim VelocityGetter. (NetworkTable subcription)   ***
                         which is tied to the 'chassis speed' function that has an
                         @autolog_output set
             Register 'Alerts'
             sets 'shiftAllerts set to true'
 
     RobotInit() is called'
+        sets signal logging auto-log to False
         disables all livewindow telemetry
         sets up Command auto-log capabilities for initialize finish and interrupt
 
         sets up some pathplanner logging
+
+    Since simulation PhysicsEngine is initialized:
+        Their drive sim does not use CTRE's built in simulation. So may need this
+        for us on another project.
+
+        Calls RobotState class method and has these that is connect to
+            Registers SIM reset listeners.
+            Registers SIM Pose listeners.
+            TODO: Any usefulness for this in our code (the logic)
+            TODO: Could be useful if we can restart simulation or if this is need for replay and we
+                do not have to reload.
+
+        Almost immediately, get a call to 'chassisSpeeds' due to NT4 update. This acceses
+        a 'fieldSpeeds' attribute of the drivetrain. This is a class from the wpilib kinematics
+        module. Also is available in pathplanner, but drivetrain uses wpilib.
+
+        Looking at our existing code. Have the ctre Telemetry hooking into pathplanner as well but
+        we have that disabled. So getting what it has and what westwood has may be something
+        that would be very useful.
+
+        ** I accommodated for it in our 'drive' command that centralizes manual driveing
+
+        Aside.  Here is what they have auto-logged with the @autolog_output in their drivetrain
+                Note that the prefix is 'Robot' or 'drive' and tends to tell if measurement is robot-centric
+                or field-centric.
+
+            getSwerveExpectedState()(key="drive/swerve/expected") -> Tuple[SwerveModuleState]
+
+            getRobotRelativeSpeeds()(key="Robot/relSpeeds") -> ChassisSpeeds
+
+            getFieldRelativeSpeeds()(key="Robot/speeds") -> ChassisSpeeds
+
+            getModuleStates()(key="drive/swerve/real") -> Tuple[SwerveModuleState]
+
+            getAngularVelocity()(key="Robot/velocity") -> RadiansPerSecond
+
+            chassisSpeeds()(key="drive/fieldSpeeds") -> ChassisSpeeds
+                Called on manual drive updates and from the waypoint command. We
+                have this in our 'drive' command.  Should be okay here but may
+                want to dig into their command structure some more
+
+          For direct calls in drivetrain code to 'Logger' functions we have:
+             'periodic' -> Logger.processInputs and others
+             'arcadeDriveWithSpeeds' -> drive/swerve/commandedSpeeds  Tied into waypoint command
+                                and drivewithpathplanned (which is their callback in pathplanner config init)

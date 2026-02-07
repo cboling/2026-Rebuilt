@@ -16,15 +16,17 @@
 # ------------------------------------------------------------------------ #
 
 import logging
-import math
 from collections import OrderedDict
 from typing import Callable
 from typing import List, Optional, Sequence, Tuple
 
+import math
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger, swerve, units, utils
 from phoenix6.swerve.requests import FieldCentric, RobotCentric
+from pykit.autolog import autolog_output, autologgable_output
+from pykit.logger import Logger
 from wpilib import DriverStation, Notifier, RobotController
 from wpilib import Field2d, RobotBase, SmartDashboard
 from wpilib.sysid import SysIdRoutineLog
@@ -37,8 +39,6 @@ from constants import GYRO_REVERSED, JOYSTICK_DEADBAND, MAX_SPEED, USE_PYKIT, WH
 from field.field_2026 import BLUE_TEST_POSE, FIELD_X_SIZE, FIELD_Y_SIZE, RED_TEST_POSE
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
-from pykit.autolog import autolog_output, autologgable_output
-from pykit.logger import Logger
 from subsystems.swervedrive.constants import DriveConstants
 from subsystems.swervedrive.swervemodule import SwerveModule
 
@@ -127,12 +127,13 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._container = container
         self._robot = container.robot
         self._physics_controller = None
-        self._last_pose: Optional[Pose2d] = None
 
         # Camera/localizer defaults
         self.vision_odometry = False
         self.field_relative = False  # Assume robot-relative to start with
 
+        self._last_pose: Optional[Pose2d] = None
+        self._field_speeds = ChassisSpeeds()
         # self.gyroOvershootFraction = 0.0
         # if not TimedCommandRobot.isSimulation():
         #     self.gyroOvershootFraction = GYRO_OVERSHOOT_FRACTION
@@ -145,6 +146,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 ("back-left", SwerveModule(self.modules[2], "back-left")),
                 ("back-right", SwerveModule(self.modules[3], "back-right"))
             ])
+
+        # Positions/pose for access via pykit
+        self._last_module_positions = self.get_module_positions()  # TODO: Do we use this? From westwood
 
         # Some useful requests amd constants
         max_speed = MAX_SPEED
@@ -227,6 +231,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._steer_characterization = swerve.requests.SysIdSwerveSteerGains()
         self._rotation_characterization = swerve.requests.SysIdSwerveRotation()
 
+        #######################################################
+        # SysID Routines and functionality    TODO: Need to dig into this and get it working
         self._sys_id_routine_translation = SysIdRoutine(
             SysIdRoutine.Config(
                 # Use default ramp rate (1 V/s) and timeout (10 s)
@@ -598,9 +604,13 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # Update the drivetrain
         self.reset_pose(pose)
 
-    @autolog_output(key="Odometry/Robot")
+    @autolog_output(key="Robot/Pose")
     def get_pose(self) -> Pose2d:
         return self.get_state().pose
+
+    @autolog_output(key="drive/fieldSpeeds")
+    def chassis_speeds(self) -> ChassisSpeeds:
+        return self._field_speeds
 
     # if USE_PYKIT:
     #     # TODO: FOLLOWING needed to support swerve drive.
@@ -657,17 +667,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         if rate_limit:
             raise NotImplementedError("TODO: Look at 2025 code if you need this")
 
-        # We scale our speed down during development
-        # scaler = self._container.chosenLimiter.getSelected()
-        # if not isinstance(scaler, (int, float)) or scaler < 0.0 or scaler > 1.0:
-        #     logger.info(f"Invalid drive rate limiter: '{scaler}")
-        #     scaler = 0.1
-        #
-        # # Convert the commanded speeds into the correct units for the drivetrain
-        # self.xSpeedDelivered = xSpeedCommanded * MAX_SPEED * scaler
-        # self.ySpeedDelivered = ySpeedCommanded * MAX_SPEED * scaler
-        # self.rotDelivered = self.currentRotation * DriveConstants.MAX_ANGULAR_SPEED * scaler
-
+        # Scale is used during development      # TODO: Condition to skip/ignore in competition
         scale_factor = self.drive_scale_factor
         max_speed = self._container.max_speed   # This is already adjusted by the scaling factor
 
@@ -675,18 +675,32 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             return min(max_speed, rate * scale_factor)
 
         if field_relative:
-            speeds = ChassisSpeeds.fromFieldRelativeSpeeds(x_speed, y_speed,
-                                                           rotation, self.gyro.heading)
-
+            self._field_speeds = speeds = ChassisSpeeds.fromFieldRelativeSpeeds(x_speed,
+                                                                                y_speed,
+                                                                                rotation,
+                                                                                self.gyro.heading)
             request = (FieldCentric().with_velocity_x(adjust(speeds.vx)).
                                       with_velocity_y(adjust(speeds.vy)).
                                       with_rotational_rate(speeds.omega * scale_factor))
         else:
-            speeds = ChassisSpeeds(x_speed, y_speed, rotation)
+            self._field_speeds = speeds = ChassisSpeeds(x_speed, y_speed, rotation)
+
             request = (RobotCentric().with_velocity_x(adjust(speeds.vx)).
                                       with_velocity_y(adjust(speeds.vy)).
                                       with_rotational_rate(speeds.omega * scale_factor))
         self.set_control(request)
+
+    def drive_with_pathplanner_path(self, chassis_speeds: ChassisSpeeds, feed_forward: list[float]) -> None:
+        # TODO: Wire into pathplanner config and debug
+
+        Logger.recordOutput("drive/swerve/commandedSpeeds", chassis_speeds)
+
+        self.set_control(
+            self.apply_robot_speeds
+            .with_speeds(ChassisSpeeds.discretize(chassis_speeds, 0.020))
+            .with_wheel_force_feedforwards_x(feed_forward.robotRelativeForcesXNewtons)
+            .with_wheel_force_feedforwards_y(feed_forward.robotRelativeForcesYNewtons)
+        ),
 
     def set_module_states(self, module_states: SwerveModuleStates) -> None:
         """

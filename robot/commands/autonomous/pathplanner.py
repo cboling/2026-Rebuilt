@@ -26,6 +26,7 @@ from pathplannerlib.auto import RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 from pathplannerlib.events import EventTrigger
 from pathplannerlib.logging import PathPlannerLogging
+from pykit.logger import Logger
 from wpilib import DriverStation, getDeployDirectory, SendableChooser
 from wpimath.kinematics import ChassisSpeeds
 from wpimath.units import degreesToRadians
@@ -37,7 +38,6 @@ from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
 from lib_6107.commands.drivetrain.arcade_drive import ArcadeDrive
 from lib_6107.commands.drivetrain.gotopoint import GoToPoint
 from lib_6107.commands.drivetrain.swervetopoint import SwerveMove, SwerveToPoint
-from pykit.logger import Logger
 from subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,9 @@ def configure_auto_builder(drivetrain: DriveSubsystem, container: 'RobotContaine
                               lambda: drivetrain.get_state().speeds,  # Supplier of current robot speeds
 
                               # Consumer of ChassisSpeeds and feedforwards to drive the robot
+                              # TODO:  Create a 'drive-with-path-planned' and set it to following
+                              #        see 'drivePathPlanned' in westwood project. Also it calls
+                              #        and does a log for each time called'.
                               lambda speeds, feedforwards: drivetrain.set_control(
                                   drivetrain.apply_robot_speeds
                                   .with_speeds(ChassisSpeeds.discretize(speeds, 0.020))
