@@ -19,7 +19,7 @@ import logging
 import os
 from typing import Optional
 
-from commands2 import cmd
+from commands2 import cmd, InstantCommand
 from commands2.sysid import SysIdRoutine
 from pathplannerlib.auto import AutoBuilder
 from pathplannerlib.auto import RobotConfig
@@ -141,13 +141,10 @@ def register_commands_and_triggers(drivetrain: DriveSubsystem, container: 'Robot
         ApproachTag.pathplanner_register(drivetrain)
 
     # Now all the triggers. This is where we can add custom commands that take arguments.
+    EventTrigger("Collect Fuel").whileTrue(cmd.PrintCommand("TODO: running intake")) # IntakeAutoCommand(container)
 
-    EventTrigger("Collect Fuel").whileTrue(cmd.PrintCommand("running intake")) # IntakeAutoCommand(container)
+    # Current, TODO: AimAndShoot just spins a 1/2 180 degrees per second for 2 seconds
+    EventTrigger("AimAndShoot").whileTrue(cmd.PrintCommand("TODO: running AimAndShoot"))
 
-    # Current, AimAndShoot just spins a 1/2 180 degrees per second for 2 seconds
-    EventTrigger("AimAndShoot").whileTrue(ArcadeDrive(drivetrain,
-                                                      rotation_speed=degreesToRadians(180)).withTimeout(2.0))
-
-    # Current, POS-1 Clime One just spins a 1/2 180 degrees per second for 2 seconds
-    EventTrigger("POS-1 Clime One").whileTrue(ArcadeDrive(drivetrain,
-                                                          rotation_speed=degreesToRadians(180)).withTimeout(2.0))
+    # Current, TODO: POS-1 Clime One just spins a 1/2 180 degrees per second for 2 seconds
+    EventTrigger("POS-1 Clime One").whileTrue(cmd.PrintCommand("TODO: running POS-1 Clime One"))
