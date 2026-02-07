@@ -13,10 +13,12 @@ Startup:
                 DriveSubsystem
                     sets  self.io = DriveIO()
                     sets  self.inputs = DriveIO.DriveIOInputs()
+                            Their swerve modules are derived from the SwerveModule IO    ** TODO Start to do with ours as we did with gyro
+
                     sets lots of initial values
 
                     if simulation.
-                        creates a sim VelocityGetter. (NetworkTable subcription)   ***
+                        creates a sim VelocityGetter. (NetworkTable subscription)   ***
                         which is tied to the 'chassis speed' function that has an
                         @autolog_output set
             Register 'Alerts'
@@ -54,6 +56,12 @@ Startup:
                 Note that the prefix is 'Robot' or 'drive' and tends to tell if measurement is robot-centric
                 or field-centric.
 
+                The 'AutoLog' decorated functions are called by pykit in the 'periodicAfterUse' that is
+                called in the early 'startCOmpetition' before the call to 'StartReceivers' and also
+                just before the call to the HAL to say we are ready to go.
+
+                So all the following get an early 'start' snapshot of all settings.
+
             getSwerveExpectedState()(key="drive/swerve/expected") -> Tuple[SwerveModuleState]
 
             getRobotRelativeSpeeds()(key="Robot/relSpeeds") -> ChassisSpeeds
@@ -73,3 +81,28 @@ Startup:
              'periodic' -> Logger.processInputs and others
              'arcadeDriveWithSpeeds' -> drive/swerve/commandedSpeeds  Tied into waypoint command
                                 and drivewithpathplanned (which is their callback in pathplanner config init)
+
+
+**********************   Now we are into the 'periodic' portion of our show ****************
+
+    RobotPeriodic is called (part of normal sequence) and..
+
+        LogTracer  resetOuter called.  Need to look at this but looks like how it
+        collects start of something and eveutnal completion.                          *** Our code needs to do this
+
+        Westwood has a 'container period' that they call from RobotPeriodic (before their
+        commmand scheduler (in-line) call.  This feeds into their RobotState they
+        maintain and it does some logging of the current state. This includes items
+        that are subsystems.  So not sure if they are logging too much since subsystems get
+        their own periodic call.  Maybe it is a gut-check call.
+
+          Currently have a placeholder in our code for this
+
+          The 'RobotMechanisms' returns the 3d Poses for their devices (not coded but looks like what we want)
+
+    Then they command scheduler is ran.  So the subsystems 'periodic' calls are performed
+
+        DriveSubsystem  - Starts log trace, does IO Update/update inputs. Their gyro
+           is part of the drive and it does updates there. Ours is a separate subsystem
+
+          ** START BACK HERE.  THIS IS KEY TO SAVING OR RESTORING FROM A LOG

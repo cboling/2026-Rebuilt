@@ -610,7 +610,7 @@ class RobotContainer:
         logger.debug("*** called initialize_dashboard")
 
     def robotPeriodic(self) -> None:
-
+        # TODO:  Need to do our own gut check and save here.
         pass
         # RobotState.periodic(self.robot_drive.getRawRotation(),
         #                     RobotController.getFPGATime() / 1e6,
@@ -619,10 +619,12 @@ class RobotContainer:
         #                     self.robot_drive.getModulePositions())
         #                     #Rotation2d(Timer.getTimestamp() / 20))  # Simulated turret rotation, just go spin
 
-        self.updateAlerts()
+        self.update_alerts()
+        #
+        # TODO: Next returns 3d poses for all mechanisms.  Might be good for our devices as well.
         # Logger.recordOutput("Component Poses", RobotMechanism.getPoses())
 
-    def updateAlerts(self):
+    def update_alerts(self):
         self.driverDisconnected.set(not DriverStation.isJoystickConnected(0))
         self.operatorDisconnected.set(not DriverStation.isJoystickConnected(1))
 

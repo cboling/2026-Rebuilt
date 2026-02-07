@@ -25,7 +25,7 @@ from pykit.logger import Logger
 from util.logtracer import LogTracer
 
 
-class SwerveModule:
+class SwerveModule(SwerveModuleIO):
     """
     The main work of the SwerveModule is done in generated code from the CTRE
     Tuner-X utility. This class wraps that generated code with what we need to
@@ -33,10 +33,12 @@ class SwerveModule:
     """
 
     def __init__(self, module: PhoenixSwerveModule, name: str):
+        super().__init__(name)
+
         self.name = name
         self.module = module
 
-        self.io = SwerveModuleIO(name)
+        #self.io = SwerveModuleIO(name)
         self.inputs = SwerveModuleIO.SwerveModuleIOInputs()
         self.previous_position = SwerveModulePosition()
 
@@ -79,7 +81,8 @@ class SwerveModule:
         LogTracer.resetOuter(f"SwerveModule/{self.name}")
         self.previous_position = self.getPosition()
         LogTracer.record("GetPosition")
-        self.io.updateInputs(self.inputs)
+        self.updateInputs(self.inputs)
+
         LogTracer.record("UpdateInputs")
         Logger.processInputs(f"Drive/Module{self.name}", self.inputs)
         LogTracer.record("ProcessInputs")
@@ -92,13 +95,13 @@ class SwerveModule:
         return Rotation2d(self.inputs.turn_position)
 
     def setSwerveAngle(self, swerve_angle: Rotation2d) -> None:
-        self.io.setSwerveAngle(swerve_angle)
+        raise NotImplemented("TODO") # ".io.setSwerveAngle(swerve_angle)
 
     def getSwerveEncoderAngle(self) -> Rotation2d:
         return Rotation2d(self.inputs.turn_absolute_position)
 
     def setSwerveAngleTarget(self, swerve_angle_target: Rotation2d) -> None:
-        self.io.setSwerveAngleTarget(swerve_angle_target)
+        raise NotImplemented("TODO") # self.io.setSwerveAngleTarget(swerve_angle_target)
 
     def getWheelLinearVelocity(self) -> float:
         return self.inputs.drive_velocity * self._wheel_radius
@@ -107,7 +110,7 @@ class SwerveModule:
         return self.inputs.drive_position * self._wheel_radius
 
     def setWheelLinearVelocityTarget(self, wheel_linear_velocity_target: float) -> None:
-        self.io.setWheelLinearVelocityTarget(wheel_linear_velocity_target / self._wheel_radius)
+        raise NotImplemented("TODO")  #  self.io.setWheelLinearVelocityTarget(wheel_linear_velocity_target / self._wheel_radius)
 
     def reset(self) -> None:
         self.setSwerveAngle(self.getSwerveEncoderAngle())

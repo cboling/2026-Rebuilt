@@ -44,6 +44,7 @@ if USE_PYKIT:
     from pykit.networktables.nt4Publisher import NT4Publisher
     from pykit.logger import Logger
     from lib_6107.util.logged_timed_command_robot import LoggedTimedCommandRobot as MyRobotBase
+    from util.logtracer import LogTracer
 else:
     from commands2 import TimedCommandRobot as MyRobotBase
 
@@ -236,23 +237,28 @@ class MyRobot(MyRobotBase):
         start = time.monotonic()
         super().robotPeriodic()
 
-        # if USE_PYKIT and False:
-        #     # This routine is called
-        #     from util.logtracer import LogTracer
-        #     from util.phoenixutil import PhoenixUtil
-        #
-        #     LogTracer.resetOuter("RobotPeriodic")
-        #     PhoenixUtil.updateSignals()               TODO: this is an optimization we may want
-        #     LogTracer.record("PhoenixUpdate")
-        #
-        #     self.container.robotPeriodic()
-        #
-        #     LogTracer.record("ContainerPeriodic")
-        #     CommandScheduler.getInstance().run()
-        #     LogTracer.record("CommandsPeriodic")
-        #     LogTracer.recordTotal()
+        if USE_PYKIT:
+            # This routine is called
+            from util.logtracer import LogTracer
+
+            LogTracer.resetOuter("RobotPeriodic")
+            #
+            # TODO: westwood calls 'updateSignals' here which I think does a backround
+            #       async signal update and is more porformant.  We should do the same
+            #       since we have a bunch of CTRE products.
+            #
+            #       Our Subsystem periodic calls are done by the command scheduler which
+            #       runs after this is called.
+            #
+            # PhoenixUtil.updateSignals()               TODO: this is an optimization we may want
+            # LogTracer.record("PhoenixUpdate")
+
+            self.container.robotPeriodic()
+
+            LogTracer.recordTotal()
 
         self._counter += 1
+        # TODO: Can we drop our 'stats' once we have all this wonderful logging in place ?
         self._stats.add("periodic", time.monotonic() - start)
 
     def disabledInit(self) -> None:

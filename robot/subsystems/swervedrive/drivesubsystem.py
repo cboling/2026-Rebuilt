@@ -502,6 +502,12 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         SmartDashboard.putNumber("Drivetrain/heading", self._last_pose.rotation().degrees())
 
     def periodic(self) -> None:
+        if USE_PYKIT:
+            from util.logtracer import LogTracer
+            LogTracer.resetOuter("DriveSubsystemPeriodic")
+            self.io.updateInputs(self.inputs)
+            LogTracer.record("IOUpdate")
+
         # Periodically try to apply the operator perspective.
         # If we haven't applied the operator perspective before, then we should apply it regardless of DS state.
         # This allows us to correct the perspective in case the robot code restarts mid-match.
@@ -517,16 +523,18 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 )
                 self._has_applied_operator_perspective = True
 
+        if USE_PYKIT:
+
+            for _label, module in self._swerve_modules.items():
+                module.periodic()       # How westwood does it
+                module.updateInputs()   # This is how we do and may want to change
+
         # Update the odometry in the periodic block
         # TODO: For pheonix6 library, just need to pass in vision measurements
         self._last_pose = self.pose
 
         if self._last_pose is not None:
             self.field.setRobotPose(self._last_pose)
-
-        if USE_PYKIT:
-            for _label, module in self._swerve_modules.items():
-                module.updateInputs()
 
             # TODO: Also need to Log the pose
 
