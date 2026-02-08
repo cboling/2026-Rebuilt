@@ -15,10 +15,10 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 import logging
-import math
 from typing import Optional
 
-from phoenix6 import BaseStatusSignal, StatusCode
+import math
+from phoenix6 import StatusCode, StatusSignal
 from phoenix6.configs import Pigeon2Configuration
 from phoenix6.hardware import pigeon2
 from phoenix6.sim.pigeon2_sim_state import Pigeon2SimState
@@ -55,12 +55,15 @@ class Pigeon2(Gyro):
         config: Pigeon2Configuration = Pigeon2Configuration()
         config.pigeon2_features.enable_compass = False
 
-        self._gyro.configurator.apply(config)
-        self._update_hz = update_frequency
+        for _ in range(5):
+            if self._gyro.configurator.apply(config, timeout_seconds=0.2).is_ok():
+                break
+
+        self._update_hz: hertz = update_frequency
 
         # Next two are for use by pykit for AdvantageScope support
-        self._yaw: BaseStatusSignal = self._gyro.get_yaw()
-        self._yaw_velocity = self._gyro.get_angular_velocity_z_world()
+        self._yaw: StatusSignal = self._gyro.get_yaw()
+        self._yaw_velocity: StatusSignal = self._gyro.get_angular_velocity_z_world()
 
     def initialize(self) -> None:
         """
@@ -68,16 +71,11 @@ class Pigeon2(Gyro):
         """
         if not self._instance_supplied:
             # Only initialize if this class did the initial initialization of the Pigeon2 object
-
             self.reset()
             if self._update_hz > 0.0:
-                # TODO: See about maybe updating faster than the base frequency. Perhaps twice as
-                #       fast from the update_hz value. This may provide a little better results if
-                #       the robot periodic call skews with respect to the Pigeon2 updates.
-
-                status = BaseStatusSignal.set_update_frequency_for_all(self._update_hz,
-                                                                       self._yaw,
-                                                                       self._yaw_velocity)
+                status = StatusSignal.set_update_frequency_for_all(self._update_hz,
+                                                                   self._yaw,
+                                                                   self._yaw_velocity)
                 if status != StatusCode.OK:
                     logger.warning(f"{self.gyro_type}: Error during gyro frequency update: {status}")
 
@@ -168,8 +166,8 @@ class Pigeon2(Gyro):
     # pykit / AdvantageScope support
 
     def updateInputs(self, inputs: GyroIO.GyroIOInputs) -> None:
-        inputs.connected = BaseStatusSignal.is_all_good(self._yaw,
-                                                        self._yaw_velocity)
+        inputs.connected = StatusSignal.is_all_good(self._yaw,
+                                                    self._yaw_velocity)
         inputs.yaw = math.radians(self._yaw.value_as_double)
         inputs.yaw_rate = math.radians(self._yaw_velocity.value_as_double)
 
@@ -192,7 +190,7 @@ class Pigeon2(Gyro):
         super().dashboard_periodic()
 
         # Pigeon has an all-good static to test if all is okay with the world
-        SmartDashboard.putBoolean('Gyro/all-good', BaseStatusSignal.is_all_good())
+        SmartDashboard.putBoolean('Gyro/all-good', StatusSignal.is_all_good())
 
     ########################################################################################
     # Simulation support

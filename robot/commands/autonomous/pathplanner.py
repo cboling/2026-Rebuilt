@@ -19,7 +19,7 @@ import logging
 import os
 from typing import Optional
 
-from commands2 import cmd, InstantCommand
+from commands2 import cmd
 from commands2.sysid import SysIdRoutine
 from pathplannerlib.auto import AutoBuilder
 from pathplannerlib.auto import RobotConfig
@@ -29,10 +29,8 @@ from pathplannerlib.logging import PathPlannerLogging
 from pykit.logger import Logger
 from wpilib import DriverStation, getDeployDirectory, SendableChooser
 from wpimath.kinematics import ChassisSpeeds
-from wpimath.units import degreesToRadians
 
 from commands.intake.intake_commands import IntakeCollectFuel
-from constants import USE_PYKIT
 from lib_6107.commands.camera.approach_tag import ApproachTag
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
 from lib_6107.commands.drivetrain.arcade_drive import ArcadeDrive
@@ -65,7 +63,7 @@ def configure_auto_builder(drivetrain: DriveSubsystem, container: 'RobotContaine
                               #        and does a log for each time called'.
                               lambda speeds, feedforwards: drivetrain.set_control(
                                   drivetrain.apply_robot_speeds
-                                  .with_speeds(ChassisSpeeds.discretize(speeds, 0.020))
+                                  .with_speeds(ChassisSpeeds.discretize(speeds, 0.020))  # TODO: Pass in period here
                                   .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
                                   .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
                               ),
@@ -81,25 +79,33 @@ def configure_auto_builder(drivetrain: DriveSubsystem, container: 'RobotContaine
                                                   DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
                               drivetrain  # Subsystem for requirements
                               )
-        if USE_PYKIT:
-            # PathPlanner and AdvantageScope integration
-            # PathPlannerLogging.setLogActivePathCallback(lambda path: Logger.recordOutput("Odometry/Trajectory",
-            #                                                                              path))
-            # PathPlannerLogging.setLogTargetPoseCallback(lambda pose: Logger.recordOutput("Odometry/TrajectorySetpoint",
-            #                                                                              pose))
 
-            PathPlannerLogging.setLogCurrentPoseCallback(lambda pose: Logger.recordOutput("PathPlanner/CurrentPose",
-                                                                                          pose))
-            PathPlannerLogging.setLogTargetPoseCallback(lambda pose: Logger.recordOutput("PathPlanner/TargetPose",
-                                                                                         pose))
-            PathPlannerLogging.setLogActivePathCallback(lambda poses: Logger.recordOutput("PathPlanner/CurrentPath",
-                                                                                          poses))
-            # TODO: Next relies upon PYKIT support
-            SysIdRoutine(SysIdRoutine.Config(1, 7, 10,
-                                             lambda state: Logger.recordOutput("Drive/SysIdState",
-                                                                               state.name),),
-                                      SysIdRoutine.Mechanism((lambda volts: drivetrain.runOpenLoop(volts, volts)),
-                                                             (lambda: None), drivetrain))    # Register all the library 'named' commands we may wish to use
+        # robot_config = RobotConfig.fromGUISettings()
+        #
+        # # TODO: What do we need here with pathplanner and assuming pykit is also supported. Also if
+        # #       we want the PPLTV Controller, should we use the AutoConstants or DriveConstants.
+        # # controller = apriltag.k_pathplanner_holonomic_controller
+        # controller = PPLTVController(1 / kwargs["pykit"]["Update Frequency"],
+        #                              MAX_SPEED)
+        # PathPlanner and AdvantageScope integration
+        # PathPlannerLogging.setLogActivePathCallback(lambda path: Logger.recordOutput("Odometry/Trajectory",
+        #                                                                              path))
+        # PathPlannerLogging.setLogTargetPoseCallback(lambda pose: Logger.recordOutput("Odometry/TrajectorySetpoint",
+        #                                                                              pose))
+
+        PathPlannerLogging.setLogCurrentPoseCallback(lambda pose: Logger.recordOutput("PathPlanner/CurrentPose",
+                                                                                      pose))
+        PathPlannerLogging.setLogTargetPoseCallback(lambda pose: Logger.recordOutput("PathPlanner/TargetPose",
+                                                                                     pose))
+        PathPlannerLogging.setLogActivePathCallback(lambda poses: Logger.recordOutput("PathPlanner/CurrentPath",
+                                                                                      poses))
+        # TODO: Next relies upon PYKIT support
+        SysIdRoutine(SysIdRoutine.Config(1, 7, 10,
+                                         lambda state: Logger.recordOutput("Drive/SysIdState",
+                                                                           state.name), ),
+                     SysIdRoutine.Mechanism((lambda volts: drivetrain.runOpenLoop(volts, volts)),
+                                            (lambda: None),
+                                            drivetrain))  # Register all the library 'named' commands we may wish to use
 
         # Load in any Autonomous Commands into the chooser
         return AutoBuilder.buildAutoChooser(default_command)

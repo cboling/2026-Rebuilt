@@ -17,54 +17,16 @@
 
 from dataclasses import dataclass
 
+from pykit.autolog import autolog
 from wpimath.geometry import Rotation2d
 from wpimath.units import amperes, radians, radians_per_second, volts
 
-from pykit.autolog import autolog
-
-"""
-SwerveDriveIO provides  drive I/O to provide log information
-for AdvantageScope replay and simulation.
-"""
-
-
-@dataclass
-class SwerveModuleConfigParams:
-    swerveEncoderOffset: float
-    swerveEncoderID: int
-    driveMotorID: int
-    driveMotorInverted: bool
-    driveGearing: float
-    steerMotorID: int
-    steerMotorInverted: bool
-    steerGearing: float
-    canbus: str = ""
-
-    # pylint:disable-next=too-many-arguments, too-many-positional-arguments
-    def __init__(
-            self,
-            driveMotorID: int,
-            driveMotorInverted: bool,
-            driveGearing: float,
-            steerMotorID: int,
-            steerMotorInverted: bool,
-            steerGearing: float,
-            swerveEncoderID: int,
-            swerveEncoderOffset: float,
-            canbus: str = "",
-    ) -> None:
-        self.driveMotorID = driveMotorID
-        self.driveMotorInverted = driveMotorInverted
-        self.driveGearing = driveGearing
-        self.steerMotorID = steerMotorID
-        self.steerMotorInverted = steerMotorInverted
-        self.steerGearing = steerGearing
-        self.swerveEncoderID = swerveEncoderID
-        self.swerveEncoderOffset = swerveEncoderOffset
-        self.canbus = canbus
-
 
 class SwerveModuleIO:
+    """
+    SwerveDriveIO provides  drive I/O to provide log information for AdvantageScope
+    replay and simulation.
+    """
     @autolog
     @dataclass
     class SwerveModuleIOInputs:

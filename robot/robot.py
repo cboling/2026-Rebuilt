@@ -28,25 +28,23 @@ from commands2.command import Command
 from ntcore import NetworkTableInstance
 from pathplannerlib.pathfinding import LocalADStar, Pathfinding
 from phoenix6 import SignalLogger
+from pykit.logger import Logger
+from pykit.networktables.nt4Publisher import NT4Publisher
+from pykit.wpilog.wpilogreader import WPILOGReader
+# pykit & AdvantageScope support
+from pykit.wpilog.wpilogwriter import WPILOGWriter
 from wpilib import DriverStation, Field2d, LiveWindow, RobotBase, SmartDashboard, Timer
 from wpimath.units import seconds
 
 import constants
-from constants import USE_PYKIT
 from lib_6107.util.statistics import RobotStatistics
 from robotcontainer import RobotContainer
 from version import VERSION
 
-if USE_PYKIT:
-    # pykit & AdvantageScope support
-    from pykit.wpilog.wpilogwriter import WPILOGWriter
-    from pykit.wpilog.wpilogreader import WPILOGReader
-    from pykit.networktables.nt4Publisher import NT4Publisher
-    from pykit.logger import Logger
+if True:
     from lib_6107.util.logged_timed_command_robot import LoggedTimedCommandRobot as MyRobotBase
-    from util.logtracer import LogTracer
 else:
-    from commands2 import TimedCommandRobot as MyRobotBase
+    from pykit.loggedrobot import LoggedRobot as MyRobotBase
 
 # Setup Logging
 logger = logging.getLogger(__name__)
@@ -73,49 +71,48 @@ class MyRobot(MyRobotBase):
         # Initialize our base class, choosing the default scheduler period
         super().__init__()
 
-        if USE_PYKIT:
-            Logger.recordMetadata("Robot", type(self).__name__)
-            Logger.recordMetadata("Team", "6107")
-            Logger.recordMetadata("Year", "2026")
+        Logger.recordMetadata("Robot", type(self).__name__)
+        Logger.recordMetadata("Team", "6107")
+        Logger.recordMetadata("Year", "2026")
 
-            match constants.ROBOT_MODE:
-                case constants.RobotModes.REAL:
-                    deploy_config = wpilib.deployinfo.getDeployData()
+        match constants.ROBOT_MODE:
+            case constants.RobotModes.REAL:
+                deploy_config = wpilib.deployinfo.getDeployData()
 
-                    if deploy_config is not None:
-                        Logger.recordMetadata("Deploy Host", deploy_config.get("deploy-host", ""))
-                        Logger.recordMetadata("Deploy User", deploy_config.get("deploy-user", ""))
-                        Logger.recordMetadata("Deploy Date", deploy_config.get("deploy-date", ""))
-                        Logger.recordMetadata("Code Path", deploy_config.get("code-path", ""))
-                        Logger.recordMetadata("Git Hash", deploy_config.get("git-hash", ""))
-                        Logger.recordMetadata("Git Branch", deploy_config.get("git-branch", ""))
-                        Logger.recordMetadata("Git Description", deploy_config.get("git-desc", ""))
+                if deploy_config is not None:
+                    Logger.recordMetadata("Deploy Host", deploy_config.get("deploy-host", ""))
+                    Logger.recordMetadata("Deploy User", deploy_config.get("deploy-user", ""))
+                    Logger.recordMetadata("Deploy Date", deploy_config.get("deploy-date", ""))
+                    Logger.recordMetadata("Code Path", deploy_config.get("code-path", ""))
+                    Logger.recordMetadata("Git Hash", deploy_config.get("git-hash", ""))
+                    Logger.recordMetadata("Git Branch", deploy_config.get("git-branch", ""))
+                    Logger.recordMetadata("Git Description", deploy_config.get("git-desc", ""))
 
-                    Logger.addDataReciever(NT4Publisher(True))
-                    Logger.addDataReciever(WPILOGWriter())
+                Logger.addDataReciever(NT4Publisher(True))
+                Logger.addDataReciever(WPILOGWriter())
 
-                case constants.RobotModes.SIMULATION:
-                    Logger.addDataReciever(WPILOGWriter())
-                    Logger.addDataReciever(NT4Publisher(True))
+            case constants.RobotModes.SIMULATION:
+                Logger.addDataReciever(WPILOGWriter())
+                Logger.addDataReciever(NT4Publisher(True))
 
-                case constants.RobotModes.REPLAY:
-                    #
-                    #  To run back a log file in replay mode, set the `LOG_PATH` environment variable
-                    #  and then run in simulation.
-                    #
-                    #  An example is to run the following:
-                    #
-                    #    LOG_PATH=/path/to/log/file.wpilog robotpy --main src sim
-                    #
-                    self.useTiming = False  # Disable timing in replay mode, run as fast as possible
+            case constants.RobotModes.REPLAY:
+                #
+                #  To run back a log file in replay mode, set the `LOG_PATH` environment variable
+                #  and then run in simulation.
+                #
+                #  An example is to run the following:
+                #
+                #    LOG_PATH=/path/to/log/file.wpilog robotpy --main src sim
+                #
+                self.UseTiming = False  # Disable timing in replay mode, run as fast as possible
 
-                    log_path = os.environ["LOG_PATH"]
-                    log_path = os.path.abspath(log_path)
+                log_path = os.environ["LOG_PATH"]
+                log_path = os.path.abspath(log_path)
 
-                    Logger.setReplaySource(WPILOGReader(log_path))
-                    Logger.addDataReciever(WPILOGWriter(log_path[:-7] + "_sim.wpilog"))
+                Logger.setReplaySource(WPILOGReader(log_path))
+                Logger.addDataReciever(WPILOGWriter(log_path[:-7] + "_sim.wpilog"))
 
-            Logger.start()
+        Logger.start()
 
         self._counter = 0  # Updated on each periodic call. Can be used to logging/smartdashboard updates
 
@@ -151,29 +148,28 @@ class MyRobot(MyRobotBase):
         logger.info("robotInit: entry")
         super().robotInit()
 
-        if USE_PYKIT:
-            # Disable RoboRio auto-logging.  TODO: If we can put a thumbdrive in, may want as a backup
-            #                                      and we should enable this again and re-evaluate.
-            SignalLogger.enable_auto_logging(False)
-            LiveWindow.disableAllTelemetry()
+        # Disable RoboRio auto-logging.  TODO: If we can put a thumbdrive in, may want as a backup
+        #                                      and we should enable this again and re-evaluate.
+        SignalLogger.enable_auto_logging(False)
+        LiveWindow.disableAllTelemetry()
 
-            # TODO: make period smaller
-            CommandScheduler.getInstance().setPeriod(0.5)  # 1/2s period for command scheduler wathdoc
+        # TODO: make period smaller?
+        CommandScheduler.getInstance().setPeriod(0.5)  # 1/2s period for command scheduler wathdoc
 
-            command_count: dict[str, int] = {}
+        command_count: dict[str, int] = {}
 
-            # Tracks active commands.
-            def logCommandFunction(command: Command, active: bool) -> None:
-                name = command.getName()
-                count = command_count.get(name, 0) + (1 if active else -1)
-                command_count[name] = count
-                Logger.recordOutput(f"Commands/{name}", count > 0)
+        # Tracks active commands.
+        def logCommandFunction(command: Command, active: bool) -> None:
+            name = command.getName()
+            count = command_count.get(name, 0) + (1 if active else -1)
+            command_count[name] = count
+            Logger.recordOutput(f"Commands/{name}", count > 0)
 
-            scheduler = CommandScheduler.getInstance()
+        scheduler = CommandScheduler.getInstance()
 
-            scheduler.onCommandInitialize(lambda c: logCommandFunction(c, True))
-            scheduler.onCommandFinish(lambda c: logCommandFunction(c, False))
-            scheduler.onCommandInterrupt(lambda c: logCommandFunction(c, False))
+        scheduler.onCommandInitialize(lambda c: logCommandFunction(c, True))
+        scheduler.onCommandFinish(lambda c: logCommandFunction(c, False))
+        scheduler.onCommandInterrupt(lambda c: logCommandFunction(c, False))
 
         # Set up logging
         self._logging_init()
@@ -235,27 +231,26 @@ class MyRobot(MyRobotBase):
         Default period is 20 mS.
         """
         start = time.monotonic()
-        super().robotPeriodic()
+        # super().robotPeriodic()
 
-        if USE_PYKIT:
-            # This routine is called
-            from util.logtracer import LogTracer
+        # This routine is called
+        from util.logtracer import LogTracer
 
-            LogTracer.resetOuter("RobotPeriodic")
-            #
-            # TODO: westwood calls 'updateSignals' here which I think does a backround
-            #       async signal update and is more porformant.  We should do the same
-            #       since we have a bunch of CTRE products.
-            #
-            #       Our Subsystem periodic calls are done by the command scheduler which
-            #       runs after this is called.
-            #
-            # PhoenixUtil.updateSignals()               TODO: this is an optimization we may want
-            # LogTracer.record("PhoenixUpdate")
+        LogTracer.resetOuter("RobotPeriodic")
+        #
+        # TODO: westwood calls 'updateSignals' here which I think does a backround
+        #       async signal update and is more porformant.  We should do the same
+        #       since we have a bunch of CTRE products.
+        #
+        #       Our Subsystem periodic calls are done by the command scheduler which
+        #       runs after this is called.
+        #
+        # PhoenixUtil.updateSignals()               TODO: this is an optimization we may want
+        # LogTracer.record("PhoenixUpdate")
 
-            self.container.robotPeriodic()
+        self.container.robotPeriodic()
 
-            LogTracer.recordTotal()
+        LogTracer.recordTotal()
 
         self._counter += 1
         # TODO: Can we drop our 'stats' once we have all this wonderful logging in place ?
@@ -288,7 +283,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in disabled
         mode.
         """
-        super().disabledPeriodic()
+        # super().disabledPeriodic()
         start = time.monotonic()
         logger.debug("called disabledPeriodic")
 
@@ -349,7 +344,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in
         autonomous mode.
         """
-        super().autonomousPeriodic()
+        # super().autonomousPeriodic()
         start = time.monotonic()
 
         if not self._auto_end_started:
@@ -413,7 +408,7 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in teleop
         mode.
         """
-        super().teleopPeriodic()
+        # super().teleopPeriodic()
         start = time.monotonic()
         pass
 
@@ -441,7 +436,7 @@ class MyRobot(MyRobotBase):
         called each time the robot enters test mode.
         """
         super().testInit()
-        logger.info("*** called testInit")
+        logger.debug("*** called testInit")
         CommandScheduler.getInstance().cancelAll()
 
     def testPeriodic(self):
@@ -452,8 +447,8 @@ class MyRobot(MyRobotBase):
         new packet is received from the driver station and the robot is in test
         mode.
         """
-        super().testPeriodic()
-        logger.info("*** called testPeriodic")
+        # super().testPeriodic()
+        logger.debug("*** called testPeriodic")
         pass
 
     def testExit(self):
@@ -464,5 +459,5 @@ class MyRobot(MyRobotBase):
         the robot exits test mode.
         """
         super().testExit()
-        logger.info("*** called testExit")
+        logger.debug("*** called testExit")
         pass

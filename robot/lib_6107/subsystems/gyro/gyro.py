@@ -14,17 +14,18 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
-import math
 from typing import Any, Optional
 
+import math
 from commands2 import Subsystem
 from pyfrc.physics.core import PhysicsInterface
+from pykit.logger import Logger
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import degrees, degrees_per_second, hertz
 
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
-from pykit.logger import Logger
+from util.logtracer import LogTracer
 
 try:
     import navx
@@ -164,9 +165,13 @@ class Gyro(Subsystem, GyroIO):
         """
         Perform any periodic maintenance
         """
-        if self._inputs is not None:
-            self.updateInputs(self._inputs)
-            Logger.processInputs("Drive/Gyro", self._inputs)
+        LogTracer.resetOuter("GyroSubsystemPeriodic")
+
+        self.updateInputs(self._inputs)
+        Logger.processInputs("Drive/Gyro", self._inputs)
+
+        LogTracer.record("IOUpdate")
+        LogTracer.recordTotal()
 
     ######################
     # SmartDashboard support

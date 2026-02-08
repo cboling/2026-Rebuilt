@@ -17,9 +17,8 @@
 # ------------------------------------------------------------------------ #
 
 from commands2 import TimedCommandRobot
-from wpilib import DSControlWord, RobotController
-
 from pykit.logger import Logger
+from wpilib import DSControlWord, RobotController
 
 
 class LoggedTimedCommandRobot(TimedCommandRobot):
@@ -49,7 +48,8 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
 
         # NOTE: When performing replay (RobotMode == REPLAY), set the following
         #       self.use_timing to False
-        self.use_timing = True
+        self.useTiming = True
+
         self.word = DSControlWord()
         self.user_code_start = 0
         self.periodic_before_start = 0
@@ -189,11 +189,9 @@ class LoggedTimedCommandRobot(TimedCommandRobot):
 
     def _end_of_loop_func(self):
         """
-        End of the periodk Loop function from the Iterative Robot base. This function is scheduled
+        End of the period Loop function from the Iterative Robot base. This function is scheduled
         to be the last function called by the CommandScheduler, so we know that all subsystems have
         been updated an any new commands issued.
-
-
         """
         ###############################################
         # Now let's close out the pykit logging for this loop.

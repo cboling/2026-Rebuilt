@@ -24,7 +24,7 @@ import math
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger, swerve, units, utils
-from phoenix6.swerve.requests import FieldCentric, RobotCentric
+from phoenix6.swerve.requests import RobotCentric
 from pykit.autolog import autolog_output, autologgable_output
 from pykit.logger import Logger
 from wpilib import DriverStation, Notifier, RobotController
@@ -32,15 +32,17 @@ from wpilib import Field2d, RobotBase, SmartDashboard
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d
-from wpimath.kinematics import ChassisSpeeds, SwerveModulePosition, SwerveModuleState
+from wpimath.kinematics import ChassisSpeeds, SwerveDrive4Kinematics, SwerveModulePosition, SwerveModuleState
 from wpimath.units import degrees, meters, meters_per_second, radians_per_second, rotationsToRadians
 
-from constants import GYRO_REVERSED, JOYSTICK_DEADBAND, MAX_SPEED, USE_PYKIT, WHEEL_CIRCUMFERENCE, WHEEL_RADIUS
+from constants import GYRO_REVERSED, JOYSTICK_DEADBAND, MAX_SPEED, MAX_WHEEL_LINEAR_VELOCITY, WHEEL_CIRCUMFERENCE, \
+    WHEEL_RADIUS
 from field.field_2026 import BLUE_TEST_POSE, FIELD_X_SIZE, FIELD_Y_SIZE, RED_TEST_POSE
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
+from lib_6107.subsystems.pykit.ctre_swervedrive import CtreSwerveModule as SwerveModule
 from subsystems.swervedrive.constants import DriveConstants
-from subsystems.swervedrive.swervemodule import SwerveModule
+from util.logtracer import LogTracer
 
 try:
     import navx
@@ -134,7 +136,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
 
         self._last_pose: Optional[Pose2d] = None
         self._field_speeds = ChassisSpeeds()
-        # self.gyroOvershootFraction = 0.0
+
+        # TODO: self.gyroOvershootFraction = 0.0
         # if not TimedCommandRobot.isSimulation():
         #     self.gyroOvershootFraction = GYRO_OVERSHOOT_FRACTION
 
@@ -146,6 +149,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 ("back-left", SwerveModule(self.modules[2], "back-left")),
                 ("back-right", SwerveModule(self.modules[3], "back-right"))
             ])
+        self._expected_swerve_states = (SwerveModuleState(), SwerveModuleState(),
+                                        SwerveModuleState(), SwerveModuleState())
 
         # Positions/pose for access via pykit
         self._last_module_positions = self.get_module_positions()  # TODO: Do we use this? From westwood
@@ -168,9 +173,10 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._forward_straight = (swerve.requests.RobotCentric().
                                   with_drive_request_type(swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE))
 
-       # The gyro/IMU sensor  # TODO: may be able to pull
+        # The gyro/IMU sensor
         self._gyro: Optional[Gyro] = Gyro.create("Pigeon2",
                                                  GYRO_REVERSED,
+                                                 update_frequency=100,
                                                  inst=self.pigeon2)
         self._gyro.initialize()
 
@@ -202,18 +208,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         #  expect to traverse the 'bump' at least twice.
         self.set_vision_measurement_std_devs((0.2, 0.2, 0.2))
 
-        # robot_config = RobotConfig.fromGUISettings()
-        #
-        # # TODO: What do we need here with pathplanner and assuming pykit is also supported. Also if
-        # #       we want the PPLTV Controller, should we use the AutoConstants or DriveConstants.
-        # # controller = apriltag.k_pathplanner_holonomic_controller
-        # controller = PPLTVController(1 / kwargs["pykit"]["Update Frequency"],
-        #                              MAX_SPEED)
-        #
-        # # # TODO: Validate what get_relative_speeds is suppose to return in the actual call.
-        # # #       it looks like it is suppose to be 4 values and not a list of 4 values (ModuleStates)
-        pass
-        #
         # Register for any changes in alliance before the match starts
         container.register_alliance_change_callback(self._alliance_change)
 
@@ -387,12 +381,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._sim_notifier = Notifier(_sim_periodic)
         self._sim_notifier.startPeriodic(self._SIM_LOOP_PERIOD)
 
-    def add_vision_measurement(
-            self,
-            vision_robot_pose: Pose2d,
-            timestamp: units.second,
-            vision_measurement_std_devs: tuple[float, float, float] | None = None,
-    ):
+    def add_vision_measurement(self, vision_robot_pose: Pose2d, timestamp: units.second,
+                               vision_measurement_std_devs: tuple[float, float, float] | None = None):
         """
         Adds a vision measurement to the Kalman Filter. This will correct the
         odometry pose estimate while still accounting for measurement noise.
@@ -447,7 +437,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     #     wheelSpeeds = self.kinematics.toWheelSpeeds(speeds)
     #     self.runClosedLoopParameters(wheelSpeeds.left, wheelSpeeds.right)
     #
-    if USE_PYKIT:
+    if False:
+        # TODO: Need these (look up pykit sysID in the pathplanner.py file?
         def runClosedLoopParameters(self, left_speed: float, right_speed: float):
             from numpy import sign
 
@@ -502,11 +493,12 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         SmartDashboard.putNumber("Drivetrain/heading", self._last_pose.rotation().degrees())
 
     def periodic(self) -> None:
-        if USE_PYKIT:
-            from util.logtracer import LogTracer
-            LogTracer.resetOuter("DriveSubsystemPeriodic")
-            self.io.updateInputs(self.inputs)
-            LogTracer.record("IOUpdate")
+        # Note: The gyro is its own subsystem and its pykit I/O is handle by the gyro
+        #       periodic function
+        LogTracer.resetOuter("DriveSubsystemPeriodic")
+        self._last_module_positions = self.get_module_positions()
+
+        LogTracer.record("StateUpdate")
 
         # Periodically try to apply the operator perspective.
         # If we haven't applied the operator perspective before, then we should apply it regardless of DS state.
@@ -523,26 +515,27 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 )
                 self._has_applied_operator_perspective = True
 
-        if USE_PYKIT:
+        for _label, module in self._swerve_modules.items():
+            module.periodic()
 
-            for _label, module in self._swerve_modules.items():
-                module.periodic()       # How westwood does it
-                module.updateInputs()   # This is how we do and may want to change
+        LogTracer.record("ModulesPeriodic")
+        LogTracer.recordTotal()
 
         # Update the odometry in the periodic block
-        # TODO: For pheonix6 library, just need to pass in vision measurements
+        # TODO: For phoenix6 library, just need to pass in vision measurements
         self._last_pose = self.pose
 
         if self._last_pose is not None:
             self.field.setRobotPose(self._last_pose)
-
-            # TODO: Also need to Log the pose
 
         # Update SmartDashboard for this subsystem at a rate slower than the period
         counter = self._robot.counter
         if counter % 100 == 0 or (self._robot.counter % 17 == 0 and
                                   self._robot.isEnabled()):
             self.dashboard_periodic()
+
+        LogTracer.record("DashboardUpdate")
+        LogTracer.recordTotal()
 
     def sim_init(self, physics_controller: 'PhysicsInterface') -> None:
         """
@@ -620,6 +613,11 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     def chassis_speeds(self) -> ChassisSpeeds:
         return self._field_speeds
 
+    @autolog_output(key="drive/swerve/expected")
+    def get_swerve_expected_state(self) -> Tuple[
+        SwerveModuleState, SwerveModuleState, SwerveModuleState, SwerveModuleState]:
+        return self._expected_swerve_states
+
     # if USE_PYKIT:
     #     # TODO: FOLLOWING needed to support swerve drive.
     #     @autolog_output(key="Drive/LeftPosition")
@@ -639,8 +637,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
     #         return self._inputs.rightVelocityRadPerSec * driveconstants.kWheelRadius
 
     def stop(self):
-        if USE_PYKIT:
-            pass  # TODO: self.runOpenLoop(0, 0)
+        if False:
+            pass  # TODO: self.runOpenLoop(0, 0)    # TODO: Look at pykit sysid work
 
         self.arcade_drive(0, 0, field_relative=True)
 
@@ -679,24 +677,47 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         scale_factor = self.drive_scale_factor
         max_speed = self._container.max_speed   # This is already adjusted by the scaling factor
 
+        if field_relative:
+            robot_speeds = ChassisSpeeds.fromFieldRelativeSpeeds(x_speed, y_speed,
+                                                                 rotation, self.gyro.heading)
+            x_speed = robot_speeds.vx
+            y_speed = robot_speeds.vy
+            rotation = robot_speeds.omega
+
+        speeds = ChassisSpeeds.discretize(ChassisSpeeds(x_speed, y_speed, rotation),
+                                          0.020)  # TODO: Pass in period here
+
         def adjust(rate: meters_per_second) -> meters_per_second:
             return min(max_speed, rate * scale_factor)
 
-        if field_relative:
-            self._field_speeds = speeds = ChassisSpeeds.fromFieldRelativeSpeeds(x_speed,
-                                                                                y_speed,
-                                                                                rotation,
-                                                                                self.gyro.heading)
-            request = (FieldCentric().with_velocity_x(adjust(speeds.vx)).
-                                      with_velocity_y(adjust(speeds.vy)).
-                                      with_rotational_rate(speeds.omega * scale_factor))
-        else:
-            self._field_speeds = speeds = ChassisSpeeds(x_speed, y_speed, rotation)
+        speeds.vx = adjust(speeds.vx)
+        speeds.vy = adjust(speeds.vy)
+        speeds.omega = adjust(speeds.omega)
 
-            request = (RobotCentric().with_velocity_x(adjust(speeds.vx)).
-                                      with_velocity_y(adjust(speeds.vy)).
-                                      with_rotational_rate(speeds.omega * scale_factor))
-        self.set_control(request)
+        # TODO: see if we can use the same as westwood here
+        # request = (RobotCentric().with_velocity_x(adjust(speeds.vx)).
+        #                           with_velocity_y(adjust(speeds.vy)).
+        #                           with_rotational_rate(speeds.omega * scale_factor))
+        #
+        # self.set_control(request)
+
+        # Update saved states
+        self._field_speeds = speeds
+        Logger.recordOutput("drive/swerve/commandedSpeeds", speeds)
+
+    def apply_states(self, module_states: Tuple[
+        SwerveModuleState, SwerveModuleState, SwerveModuleState, SwerveModuleState]) -> None:
+        # desaturate the states
+        front_left_state, front_right_state, back_left_state, back_right_state = \
+            SwerveDrive4Kinematics.desaturateWheelSpeeds(module_states, MAX_WHEEL_LINEAR_VELOCITY)
+
+        self._expected_swerve_states = (front_left_state, front_right_state,
+                                        back_left_state, back_right_state)
+
+        self._swerve_modules["front-left"].apply_states(front_left_state)
+        self._swerve_modules["front-right"].apply_states(front_right_state)
+        self._swerve_modules["back-left"].apply_states(back_left_state)
+        self._swerve_modules["back-right"].apply_states(back_right_state)
 
     def drive_with_pathplanner_path(self, chassis_speeds: ChassisSpeeds, feed_forward: list[float]) -> None:
         # TODO: Wire into pathplanner config and debug
@@ -756,7 +777,6 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
             pass
 
         return scaler
-
 
     def set_motor_brake(self, brake: bool) -> None:
         # TODO: Need to actually set the IdleMode to 'brake' since this

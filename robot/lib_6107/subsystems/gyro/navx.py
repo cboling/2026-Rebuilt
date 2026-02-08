@@ -14,9 +14,9 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
-import math
-from typing import Optional, Any
+from typing import Any, Optional
 
+import math
 from wpilib import RobotBase
 from wpilib.simulation import SimDeviceSim
 from wpimath.geometry import Rotation2d
@@ -136,7 +136,7 @@ class NavX(Gyro):
 
         return -rate if self._reversed else rate
 
-    def periodic(self, inputs: GyroIO.GyroIOInputs) -> None:
+    def periodic(self) -> None:
         """
         Perform any periodic maintenance
         """
@@ -152,11 +152,11 @@ class NavX(Gyro):
         inputs.connected = self._gyro.isConnected()
         inputs.yawPosition = Rotation2d.fromDegrees(self.angle)
 
-        gyroz = self._gyro.getRawGyroZ()
+        gyro_z = self._gyro.getRawGyroZ()
         if self.is_reversed:
-            gyroz = -gyroz
+            gyro_z = -gyro_z
 
-        inputs.yawVelocityDegPerSec = gyroz * RADIANS_PER_DEGREE
+        inputs.yawVelocityDegPerSec = gyro_z * RADIANS_PER_DEGREE
 
     ######################
     # Simulation support

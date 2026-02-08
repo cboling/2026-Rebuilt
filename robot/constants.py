@@ -17,20 +17,19 @@
 #
 # Constants for source in this subdirectory will go here
 
-import math
 import os
 from enum import Enum, IntEnum, unique
 
+import math
 from wpilib import RobotBase
-from wpimath.geometry import Rotation2d, Translation3d
+from wpimath.geometry import Rotation2d, Translation2d, Translation3d
+from wpimath.kinematics import SwerveDrive4Kinematics
 from wpimath.trajectory import TrapezoidProfileRadians
 from wpimath.units import kilograms, lbsToKilograms, meters, meters_per_second, radians_per_second, rotationsToRadians, \
     seconds
 
 from generated.tuner_constants import TunerConstants  # Use Tuner X constants if available
 from lib_6107.constants import *
-
-USE_PYKIT = True
 
 
 class RobotModes(Enum):
@@ -70,9 +69,11 @@ AUTONOMOUS_END_TRIGGER_TIME = 10
 #################################################################
 # Drive subsystem related constants
 #
-# Maximum speed of the robot in meters per second, used to limit acceleration.
+# Maximum speed of the robot in meters per second, used to limit acceleration. The
+# Minimum speed is used to keep the robot from moving at a very low rate
 
 MAX_SPEED: meters_per_second = TunerConstants.speed_at_12_volts  # TODO: Measure this
+MIN_SPEED: meters_per_second = 0.002
 MAX_ANGULAR_SPEED: radians_per_second = rotationsToRadians(0.75)  # TODO: Measure this
 MAX_ANGULAR_ACCELERATION: radians_per_second = rotationsToRadians(0.75)  # Actually is radians/second^2
 
@@ -85,6 +86,8 @@ WHEEL_RADIUS: meters = TunerConstants._wheel_radius
 WHEEL_DIAMETER: meters = WHEEL_RADIUS * 3
 WHEEL_CIRCUMFERENCE: meters = WHEEL_DIAMETER * math.pi
 
+MAX_WHEEL_LINEAR_VELOCITY: meters_per_second = 1.0
+
 # Hold time on motor brakes when disabled
 WHEEL_LOCK_TIME: seconds = 3  # seconds
 
@@ -94,6 +97,12 @@ TURN_CONSTANT = 6
 
 GYRO_REVERSED = False  # (affects field-relative driving)
 
+DriveKinematics = SwerveDrive4Kinematics(
+    Translation2d(TunerConstants._front_left_x_pos, TunerConstants._front_left_y_pos),
+    Translation2d(TunerConstants._front_right_x_pos, TunerConstants._front_right_y_pos),
+    Translation2d(TunerConstants._back_left_x_pos, TunerConstants._back_left_y_pos),
+    Translation2d(TunerConstants._back_right_x_pos, TunerConstants._back_right_y_pos)
+)
 
 #################################################################
 # Other subsystem and device constants for this year's project

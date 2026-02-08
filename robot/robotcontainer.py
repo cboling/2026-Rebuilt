@@ -18,14 +18,15 @@
 import json
 import logging
 import os
-import time
 from typing import Any, Callable, Dict, List, Optional
 
+import time
 from commands2 import button, cmd, Command, InstantCommand, PrintCommand, RunCommand, Subsystem
 from commands2.button import CommandXboxController, Trigger
 from commands2.sysid import SysIdRoutine
 from ntcore import NetworkTableInstance
 from phoenix6 import swerve
+from pykit.alertlogger import AlertLogger
 from wpilib import Alert, DriverStation, Field2d, getDeployDirectory, RobotBase, SendableChooser, SmartDashboard, \
     XboxController
 from wpimath.geometry import Rotation2d
@@ -42,8 +43,6 @@ from lib_6107.commands.camera.track_tag_command import TrackTagCommand
 from lib_6107.commands.drivetrain.reset_xy import ResetXY
 from lib_6107.constants import DEFAULT_ROBOT_FREQUENCY
 from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem
-from lib_6107.util.phoenix6_telemetry import Telemetry
-from pykit.alertlogger import AlertLogger
 from subsystems.rev_shooter import RevShooter as Shooter
 
 logger = logging.getLogger(__name__)
@@ -139,8 +138,7 @@ class RobotContainer:
         ##########################################
         #   ALERTS
         #
-        if constants.USE_PYKIT:
-            AlertLogger.registerGroup("Alerts")
+        AlertLogger.registerGroup("Alerts")
 
         self.driverDisconnected = Alert("Driver controller disconnected (port 0)", Alert.AlertType.kWarning)
         self.operatorDisconnected = Alert("Operator controller disconnected (port 1)", Alert.AlertType.kWarning)
@@ -153,10 +151,10 @@ class RobotContainer:
         ##########################################
         #   TELEMETRY
         #
-        if constants.USE_PYKIT:
-            self._logger = None
-        else:
-            self._logger = Telemetry(self._max_speed)
+        # Disabled since we are using pykit for now. Kept here in case we need it for some
+        # tuning with other tools
+        self._phoenix_telemetry = None
+        # self._phoenix_telemetry = Telemetry(self._max_speed)
 
         ##########################################
         #   PathPlanner.  Do this last since it may pull in commands that need the previously
@@ -192,8 +190,8 @@ class RobotContainer:
         self.configure_additional_autos()
 
         # Register telemetry support if not running pykit/AdvantageScope
-        if self._logger is not None:
-            self.robot_drive.register_telemetry(lambda state: self._logger.telemeterize(state))
+        if self._phoenix_telemetry is not None:
+            self.robot_drive.register_telemetry(lambda state: self._phoenix_telemetry.telemeterize(state))
 
         # Speed limiter useful during initial development
         self._limit_chooser = None

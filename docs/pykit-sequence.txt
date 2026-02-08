@@ -102,7 +102,7 @@ Startup:
 
     Then they command scheduler is ran.  So the subsystems 'periodic' calls are performed
 
-        DriveSubsystem  - Starts log trace, does IO Update/update inputs. Their gyro
+        DriveSubsystem 'periodic'  - Starts log trace, does IO Update/update inputs. Their gyro
            is part of the drive and it does updates there. Ours is a separate subsystem
 
           ** START BACK HERE.  THIS IS KEY TO SAVING OR RESTORING FROM A LOG
