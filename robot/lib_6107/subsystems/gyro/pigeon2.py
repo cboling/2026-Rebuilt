@@ -26,6 +26,7 @@ from wpilib import RobotBase, SmartDashboard
 from wpimath.units import degrees, degrees_per_second, hertz, radians
 
 from lib_6107.subsystems.gyro.gyro import Gyro, GyroIO
+from lib_6107.util.phoenix6_signals import Phoenix6Signals
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ class Pigeon2(Gyro):
         if not self._instance_supplied:
             # Only initialize if this class did the initial initialization of the Pigeon2 object
             self.reset()
+
             if self._update_hz > 0.0:
                 status = StatusSignal.set_update_frequency_for_all(self._update_hz,
                                                                    self._yaw,
@@ -83,6 +85,8 @@ class Pigeon2(Gyro):
 
             if status != StatusCode.OK:
                 logger.warning(f"{self.gyro_type}: Error during gyro bus optimization: {status}")
+
+        Phoenix6Signals.register_signals(self._yaw, self._yaw_velocity)
 
     @property
     def calibrated(self) -> bool:

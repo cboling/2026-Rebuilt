@@ -31,6 +31,7 @@ from wpimath.units import meters, meters_per_second
 
 import constants
 from lib_6107.subsystems.pykit.swervedrive_io import SwerveModuleIO
+from lib_6107.util.phoenix6_signals import Phoenix6Signals
 from util.logtracer import LogTracer
 
 
@@ -70,6 +71,17 @@ class CtreSwerveModule(SwerveModuleIO):
         self.turn_torque_current: StatusSignal = self._steer_motor.get_torque_current()
 
         self.turn_absolute_position: StatusSignal = self._encoder.get_absolute_position()
+
+        Phoenix6Signals.register_signals(self.drive_velocity,
+                                         self.drive_applied,
+                                         self.drive_supply_current,
+                                         self.drive_torque_current,
+                                         self.turn_position,
+                                         self.turn_velocity,
+                                         self.turn_applied,
+                                         self.turn_supply_current,
+                                         self.turn_torque_current,
+                                         self.turn_absolute_position)
 
     def getSwerveAngle(self) -> Rotation2d:
         return Rotation2d(self._inputs.turn_position)

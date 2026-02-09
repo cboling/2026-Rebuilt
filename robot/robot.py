@@ -28,17 +28,19 @@ from commands2.command import Command
 from ntcore import NetworkTableInstance
 from pathplannerlib.pathfinding import LocalADStar, Pathfinding
 from phoenix6 import SignalLogger
+# pykit & AdvantageScope support
 from pykit.logger import Logger
 from pykit.networktables.nt4Publisher import NT4Publisher
 from pykit.wpilog.wpilogreader import WPILOGReader
-# pykit & AdvantageScope support
 from pykit.wpilog.wpilogwriter import WPILOGWriter
 from wpilib import DriverStation, Field2d, LiveWindow, RobotBase, SmartDashboard, Timer
 from wpimath.units import seconds
 
 import constants
+from lib_6107.util.phoenix6_signals import Phoenix6Signals
 from lib_6107.util.statistics import RobotStatistics
 from robotcontainer import RobotContainer
+from util.logtracer import LogTracer
 from version import VERSION
 
 if True:
@@ -127,6 +129,7 @@ class MyRobot(MyRobotBase):
         self._is_simulation = RobotBase.isSimulation()
 
         self._network_tables_instance = NetworkTableInstance.getDefault()
+        self._phoenix_signals = Phoenix6Signals()
 
         # Visualization and pose support
         self.match_started = False  # Set true on Autonomous or Teleop init
@@ -231,24 +234,15 @@ class MyRobot(MyRobotBase):
         Default period is 20 mS.
         """
         start = time.monotonic()
-        # super().robotPeriodic()
 
         # This routine is called
-        from util.logtracer import LogTracer
-
         LogTracer.resetOuter("RobotPeriodic")
-        #
-        # TODO: westwood calls 'updateSignals' here which I think does a backround
-        #       async signal update and is more porformant.  We should do the same
-        #       since we have a bunch of CTRE products.
-        #
-        #       Our Subsystem periodic calls are done by the command scheduler which
-        #       runs after this is called.
-        #
-        # PhoenixUtil.updateSignals()               TODO: this is an optimization we may want
-        # LogTracer.record("PhoenixUpdate")
+
+        _status = Phoenix6Signals.refresh()
+        LogTracer.record("PhoenixUpdate")
 
         self.container.robotPeriodic()
+        LogTracer.record("ContainerPeriodic")
 
         LogTracer.recordTotal()
 
