@@ -166,7 +166,6 @@ try:
             """
             return self._hb.get()
 
-
         def get_seconds_since_last_heartbeat(self) -> float:
             return Timer.getFPGATimestamp() - self._last_heartbeat_time
 

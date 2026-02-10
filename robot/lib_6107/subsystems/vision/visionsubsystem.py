@@ -23,7 +23,7 @@ from ntcore import NetworkTable, NetworkTableInstance
 from robotpy_apriltag import AprilTagDetector, AprilTagField, AprilTagFieldLayout
 from wpilib import RobotBase, SmartDashboard
 from wpimath.geometry import Rotation2d, Transform3d
-from wpimath.units import degrees, percent
+from wpimath.units import degrees, milliseconds, percent, seconds
 
 import constants
 from lib_6107.util.field import Field
@@ -133,6 +133,58 @@ class VisionSubsystem(Subsystem):
     @property
     def april_tag_field(self) -> AprilTagField:
         return self._april_tag_field
+
+    @property
+    def pipeline(self) -> int:
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @pipeline.setter
+    def pipeline(self, index: int) -> None:
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @property
+    def latency(self) -> Optional[milliseconds]:
+        return None
+
+    @property
+    def timestamp(self) -> Optional[seconds]:
+        """
+        Returns the estimated time the frame was taken, in the Received system's time base
+        """
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @property
+    def best_target(self) -> Optional[VisionTargetData]:
+        """
+        Returns the best target in this pipeline result. If there are no targets, this method will
+        return null. The best target is determined by the target sort mode in the PhotonVision UI.
+        """
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @property
+    def valid(self) -> bool:
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @property
+    def area(self) -> percent:
+        """
+        Target Area (0..100] percent of image
+        """
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @property
+    def x_offset(self) -> degrees:
+        """
+        Horizontal Offset from Crosshair to Target
+        """
+        raise NotImplementedError("TODO: Implement in subclass")
+
+    @property
+    def y_offset(self) -> degrees:
+        """
+        Vertical Offset from Crosshair to Target
+        """
+        raise NotImplementedError("TODO: Implement in subclass")
 
     def get_latest_results(self) -> Optional[Any]:
         raise NotImplementedError("Implement in subclass")

@@ -18,9 +18,9 @@
 import json
 import logging
 import os
+import time
 from typing import Any, Callable, Dict, List, Optional
 
-import time
 from commands2 import button, cmd, Command, InstantCommand, PrintCommand, RunCommand, Subsystem
 from commands2.button import CommandXboxController, Trigger
 from commands2.sysid import SysIdRoutine
@@ -383,7 +383,7 @@ class RobotContainer:
         )
         # Left Trigger - Rotate (in-place) toward best AprilTag.
         def turn_to_object():
-            x = self.camera.getX()
+            x = self.camera("front").x_offset
             print(f"x={x}")
             turn_speed = -0.005 * x
             self.robot_drive.rotate(turn_speed)
