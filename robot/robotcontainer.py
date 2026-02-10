@@ -184,7 +184,7 @@ class RobotContainer:
             if isinstance(controller, CommandXboxController):
                 self.configure_button_bindings_xbox(controller, is_driver)
             else:
-                self.configure_button_bindings_joystick(controller, is_driver)
+                logger.error(f"Unsupported controller type {type(controller)}")
 
         # Configure the additional autos that do not come from pathplanner
         self.configure_additional_autos()
@@ -200,8 +200,6 @@ class RobotContainer:
         ########################################################
         # Initialize the Smart dashboard for each subsystem
         # Dashboard setup
-        self.initialize_dashboard()  # TODO: Deprecate this
-
         for subsystem in self.subsystems:
             if hasattr(subsystem, "dashboard_initialize") and callable(getattr(subsystem,
                                                                                "dashboard_initialize")):
@@ -514,18 +512,6 @@ class RobotContainer:
                                                            threshold=0.5)
         right_bumper_pressed.whileTrue(track_any_tag)
 
-    def configure_button_bindings_joystick(self, controller, is_driver: bool) -> None:
-        """
-        Use this method to define your button->command mappings. Buttons can be created by
-        instantiating a :GenericHID or one of its subclasses (Joystick or XboxController),
-        and then passing it to a JoystickButton.
-        """
-        logger.warning(
-            f"*** called configure_button_bindings_joystick, controller: {controller}, is_driver: {is_driver}")
-        pass  # TODO: Not supported at this time. If this is supported, look into places where
-        #       XboxController may be used directly (such as in the default drive command
-        #       above). Eventually need to abstract this.
-
     def _init_vision_subsystems(self) -> List[Subsystem]:
         camera_subsystems = []
 
@@ -603,9 +589,6 @@ class RobotContainer:
             return InstantCommand(lambda: self.robot_drive.stop())
 
         return PrintCommand("Do-Nothing Command")
-
-    def initialize_dashboard(self):
-        logger.debug("*** called initialize_dashboard")
 
     def robotPeriodic(self) -> None:
         # TODO:  Need to do our own gut check and save here.

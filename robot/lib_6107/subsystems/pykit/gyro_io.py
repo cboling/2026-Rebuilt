@@ -17,7 +17,7 @@
 
 from dataclasses import dataclass
 
-from wpimath.units import radians
+from wpimath.units import radians, radians_per_second
 
 from pykit.autolog import autolog
 
@@ -26,9 +26,14 @@ class GyroIO:
     @autolog
     @dataclass
     class GyroIOInputs:
+        """
+        Loggable inputs for a gyro sensor.
+
+        Currently only the yaw (angle) and yaw rate
+        """
         connected: bool = False
         yaw: radians = 0.0
-        yaw_rate: float = 0.0
+        yaw_rate: radians_per_second = 0.0
 
     def updateInputs(self, inputs: GyroIOInputs) -> None:
         pass

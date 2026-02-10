@@ -108,6 +108,10 @@ def configure_auto_builder(drivetrain: DriveSubsystem, container: 'RobotContaine
                                             drivetrain))  # Register all the library 'named' commands we may wish to use
 
         # Load in any Autonomous Commands into the chooser
+
+        # AdvantageKit/pykit provide a LoggedDashboardChooser that can be
+        # logged.  TODO: Support that and also use it for any other chooser.
+
         return AutoBuilder.buildAutoChooser(default_command)
 
     logger.error(f"PathPlanner settings {file_path} not found or is not readable")

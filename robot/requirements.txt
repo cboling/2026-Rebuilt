@@ -27,7 +27,7 @@ pyntcore                == 2026.2.1
 certifi                 == 2026.1.4
 
 # Vision support
-photonlibpy             == 2026.2.1
+photonlibpy             == 2026.2.2
 limelightlib-python     == 0.9.6
 
 # AdvantageKit support

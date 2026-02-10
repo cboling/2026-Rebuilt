@@ -14,6 +14,7 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
+
 from typing import Any, Optional
 
 import math
@@ -22,7 +23,7 @@ from pyfrc.physics.core import PhysicsInterface
 from pykit.logger import Logger
 from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
-from wpimath.units import degrees, degrees_per_second, hertz
+from wpimath.units import degrees, degrees_per_second, hertz, radians_per_second
 
 from lib_6107.subsystems.pykit.gyro_io import GyroIO
 from util.logtracer import LogTracer
@@ -43,7 +44,10 @@ except ImportError:
 class Gyro(Subsystem, GyroIO):
     """
     Gyro is the base class for gyros on our system. Actual gyros are derived
-    from this class.
+    from this class
+
+    For ALL run-time measurements that need to be logged (or replayed, use the
+    GyroIO as the source/target.
     """
     gyro_type = "unknown"
 
@@ -150,7 +154,7 @@ class Gyro(Subsystem, GyroIO):
         return Rotation2d.fromDegrees(self.yaw)
 
     @property
-    def turn_rate(self) -> float:
+    def turn_rate(self) -> radians_per_second:
         """Returns the turn rate of the robot (in radians per second)
 
         :returns: The turn rate of the robot, in radians per second

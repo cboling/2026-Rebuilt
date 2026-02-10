@@ -14,6 +14,7 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
+
 import logging
 from typing import Optional
 
@@ -23,7 +24,7 @@ from phoenix6.configs import Pigeon2Configuration
 from phoenix6.hardware import pigeon2
 from phoenix6.sim.pigeon2_sim_state import Pigeon2SimState
 from wpilib import RobotBase, SmartDashboard
-from wpimath.units import degrees, degrees_per_second, hertz, radians
+from wpimath.units import degrees, degrees_per_second, hertz, radians, radians_per_second
 
 from lib_6107.subsystems.gyro.gyro import Gyro, GyroIO
 from lib_6107.util.phoenix6_signals import Phoenix6Signals
@@ -33,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 class Pigeon2(Gyro):
     """
-    Pigeon2 gyro implementation
+    Pigeon2 gyro implementation.
+
+    For ALL run-time measurements that need to be logged (or replayed, use the
+    GyroIO as the source/target.
     """
     gyro_type = "Pigeon2"
 
@@ -154,7 +158,7 @@ class Pigeon2(Gyro):
         return self.yaw
 
     @property
-    def turn_rate(self) -> float:
+    def turn_rate(self) -> radians_per_second:
         """
         Returns the turn rate of the robot (in radians per second)
         """

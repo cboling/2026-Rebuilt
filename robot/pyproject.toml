@@ -55,7 +55,7 @@ components = [
 
 # Other pip packages to install
 requires = [
-    "photonlibpy==2026.2.1",
+    "photonlibpy==2026.2.2",
     "limelightlib-python==0.9.6",
     "pyntcore"
 ]

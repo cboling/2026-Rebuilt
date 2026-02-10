@@ -14,13 +14,14 @@
 #                                                                          #
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
+
 from typing import Any, Optional
 
 import math
 from wpilib import RobotBase
 from wpilib.simulation import SimDeviceSim
 from wpimath.geometry import Rotation2d
-from wpimath.units import degrees, degrees_per_second
+from wpimath.units import degrees, degrees_per_second, radians_per_second
 
 try:
     import navx
@@ -123,7 +124,7 @@ class NavX(Gyro):
         return -angle if self._reversed else angle
 
     @property
-    def turn_rate(self) -> float:
+    def turn_rate(self) -> radians_per_second:
         """Returns the turn rate of the robot (in radians per second)
 
         :returns: The turn rate of the robot, in radians per second
@@ -152,7 +153,7 @@ class NavX(Gyro):
         inputs.connected = self._gyro.isConnected()
         inputs.yawPosition = Rotation2d.fromDegrees(self.angle)
 
-        gyro_z = self._gyro.getRawGyroZ()
+        gyro_z: degrees_per_second = self._gyro.getRawGyroZ()
         if self.is_reversed:
             gyro_z = -gyro_z
 
