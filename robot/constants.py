@@ -17,16 +17,16 @@
 #
 # Constants for source in this subdirectory will go here
 
+import math
 import os
 from enum import Enum, IntEnum, unique
 
-import math
 from wpilib import RobotBase
 from wpimath.geometry import Rotation2d, Translation2d, Translation3d
 from wpimath.kinematics import SwerveDrive4Kinematics
 from wpimath.trajectory import TrapezoidProfileRadians
-from wpimath.units import kilograms, lbsToKilograms, meters, meters_per_second, radians_per_second, rotationsToRadians, \
-    seconds
+from wpimath.units import hertz, kilograms, lbsToKilograms, meters, meters_per_second, radians_per_second, \
+    rotationsToRadians, seconds
 
 from generated.tuner_constants import TunerConstants  # Use Tuner X constants if available
 from lib_6107.constants import *
@@ -49,7 +49,6 @@ ROBOT_MODE = RobotModes.REAL if RobotBase.isReal() else SIM_MODE
 # Robot Constants
 ROBOT_MASS: kilograms = lbsToKilograms(148 - 20.3)  # 32lbs * kg per pound
 # CHASSIS    = Matter(geometry.Translation3d(0, 0, units.inchesToMeters(8)), ROBOT_MASS)        TODO: Figure this out
-LOOP_TIME = 0.13  # seconds, 20ms + 110ms sprk max velocity lag
 
 # Robot size (including bumpers). Defaults, use PathPlanner to set actual value to
 #                                 use if PathPlanner is supported
@@ -60,6 +59,9 @@ ROBOT_Y_WIDTH_DEFAULT: meters = 0.4
 # Device CAN bus IDs
 DRIVER_CONTROLLER_PORT = 0
 SHOOTER_CONTROLLER_PORT = 1
+
+DEFAULT_FREQUENCY: hertz = 50.0
+ODOMETRY_FREQUENCY: hertz = 100.0  # Primarily for yaw
 
 #################################################################
 # Autonomous End Game Timing

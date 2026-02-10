@@ -15,10 +15,9 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
+import math
 from typing import Any, Optional
 
-import math
-from commands2 import Subsystem
 from pyfrc.physics.core import PhysicsInterface
 from pykit.logger import Logger
 from wpilib import SmartDashboard
@@ -41,7 +40,7 @@ except ImportError:
     PIGEON2_SUPPORTED = False
 
 
-class Gyro(Subsystem, GyroIO):
+class Gyro(GyroIO):
     """
     Gyro is the base class for gyros on our system. Actual gyros are derived
     from this class
@@ -52,7 +51,6 @@ class Gyro(Subsystem, GyroIO):
     gyro_type = "unknown"
 
     def __init__(self, is_reversed: bool) -> None:
-        Subsystem.__init__(self)
         GyroIO().__init__()
 
         self._gyro = None
@@ -67,6 +65,10 @@ class Gyro(Subsystem, GyroIO):
         Get the underlying Gyro/IMU object, if any.
         """
         return self._gyro
+
+    @property
+    def inputs(self) -> GyroIO.GyroIOInputs:
+        return self._inputs
 
     @staticmethod
     def create(gyro_type: str, is_reversed: bool,
@@ -169,13 +171,11 @@ class Gyro(Subsystem, GyroIO):
         """
         Perform any periodic maintenance
         """
-        LogTracer.resetOuter("GyroSubsystemPeriodic")
+        # We do not reset the outer log time as we are called within the DriveTrain:periodic() method
 
         self.updateInputs(self._inputs)
         Logger.processInputs("Drive/Gyro", self._inputs)
-
         LogTracer.record("IOUpdate")
-        LogTracer.recordTotal()
 
     ######################
     # SmartDashboard support

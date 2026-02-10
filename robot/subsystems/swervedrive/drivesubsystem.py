@@ -16,11 +16,11 @@
 # ------------------------------------------------------------------------ #
 
 import logging
+import math
 from collections import OrderedDict
 from typing import Callable
 from typing import List, Optional, Sequence, Tuple
 
-import math
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger, swerve, units, utils
@@ -33,10 +33,11 @@ from wpilib.sysid import SysIdRoutineLog
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.kinematics import ChassisSpeeds, SwerveDrive4Kinematics, SwerveModulePosition, SwerveModuleState
-from wpimath.units import degrees, meters, meters_per_second, radians_per_second, rotationsToRadians
+from wpimath.units import degrees, meters, meters_per_second, radians_per_second, rotationsToRadians, \
+    seconds
 
-from constants import GYRO_REVERSED, JOYSTICK_DEADBAND, MAX_SPEED, MAX_WHEEL_LINEAR_VELOCITY, WHEEL_CIRCUMFERENCE, \
-    WHEEL_RADIUS
+from constants import GYRO_REVERSED, JOYSTICK_DEADBAND, MAX_SPEED, MAX_WHEEL_LINEAR_VELOCITY, ODOMETRY_FREQUENCY, \
+    WHEEL_CIRCUMFERENCE, WHEEL_RADIUS
 from field.field_2026 import BLUE_TEST_POSE, FIELD_X_SIZE, FIELD_Y_SIZE, RED_TEST_POSE
 from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
@@ -137,6 +138,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._last_pose: Optional[Pose2d] = None
         self._field_speeds = ChassisSpeeds()
 
+        self.last_heading: Rotation2d = Rotation2d()
+        self.last_heading_timestamp: seconds = 0.0
+
         # TODO: self.gyroOvershootFraction = 0.0
         # if not TimedCommandRobot.isSimulation():
         #     self.gyroOvershootFraction = GYRO_OVERSHOOT_FRACTION
@@ -176,7 +180,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         # The gyro/IMU sensor
         self._gyro: Optional[Gyro] = Gyro.create("Pigeon2",
                                                  GYRO_REVERSED,
-                                                 update_frequency=100,
+                                                 update_frequency=ODOMETRY_FREQUENCY,
                                                  inst=self.pigeon2)
         self._gyro.initialize()
 
@@ -484,6 +488,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         """
         SmartDashboard.putData("Field", self.field)
 
+        self.gyro.dashboard_initialize()
+
     def dashboard_periodic(self) -> None:
         """
         Called from periodic function to update dashboard elements for this subsystem
@@ -491,6 +497,8 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         SmartDashboard.putNumber("Drivetrain/x", self._last_pose.x)
         SmartDashboard.putNumber("Drivetrain/y", self._last_pose.y)
         SmartDashboard.putNumber("Drivetrain/heading", self._last_pose.rotation().degrees())
+
+        self.gyro.dashboard_periodic()
 
     def periodic(self) -> None:
         # Note: The gyro is its own subsystem and its pykit I/O is handle by the gyro
@@ -514,6 +522,13 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                     else self._BLUE_ALLIANCE_PERSPECTIVE_ROTATION
                 )
                 self._has_applied_operator_perspective = True
+
+        # Update gyro first. We use to have this as a subsystem, but now it is not and we
+        # call it here so it is up to date
+        self.gyro.periodic()  # This call will log the gyro inputs for us...
+
+        self.last_heading = Rotation2d(self.gyro.inputs.yaw)
+        self.last_heading_timestamp = self.gyro.inputs.yaw_timestamp
 
         for _label, module in self._swerve_modules.items():
             module.periodic()

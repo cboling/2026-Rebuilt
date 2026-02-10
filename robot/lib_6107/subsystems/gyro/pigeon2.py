@@ -16,9 +16,9 @@
 # ------------------------------------------------------------------------ #
 
 import logging
+import math
 from typing import Optional
 
-import math
 from phoenix6 import StatusCode, StatusSignal
 from phoenix6.configs import Pigeon2Configuration
 from phoenix6.hardware import pigeon2
@@ -26,6 +26,7 @@ from phoenix6.sim.pigeon2_sim_state import Pigeon2SimState
 from wpilib import RobotBase, SmartDashboard
 from wpimath.units import degrees, degrees_per_second, hertz, radians, radians_per_second
 
+from constants import DEFAULT_FREQUENCY
 from lib_6107.subsystems.gyro.gyro import Gyro, GyroIO
 from lib_6107.util.phoenix6_signals import Phoenix6Signals
 
@@ -69,6 +70,8 @@ class Pigeon2(Gyro):
         # Next two are for use by pykit for AdvantageScope support
         self._yaw: StatusSignal = self._gyro.get_yaw()
         self._yaw_velocity: StatusSignal = self._gyro.get_angular_velocity_z_world()
+        self._roll: StatusSignal = self._gyro.get_roll()
+        self._pitch: StatusSignal = self._gyro.get_pitch()
 
     def initialize(self) -> None:
         """
@@ -78,19 +81,28 @@ class Pigeon2(Gyro):
             # Only initialize if this class did the initial initialization of the Pigeon2 object
             self.reset()
 
-            if self._update_hz > 0.0:
-                status = StatusSignal.set_update_frequency_for_all(self._update_hz,
-                                                                   self._yaw,
-                                                                   self._yaw_velocity)
-                if status != StatusCode.OK:
-                    logger.warning(f"{self.gyro_type}: Error during gyro frequency update: {status}")
+        # Always tune the update frequency
+        status = StatusSignal.set_update_frequency_for_all(DEFAULT_FREQUENCY,
+                                                           self._yaw,
+                                                           self._yaw_velocity,
+                                                           self._roll,
+                                                           self._pitch)
+        if status != StatusCode.OK:
+            logger.warning(f"{self.gyro_type}: Error during gyro frequency update: {status}")
 
-            status = self._gyro.optimize_bus_utilization()
+        if self._update_hz > 0.0:
+            status = self._yaw.set_update_frequency(self._update_hz)
 
             if status != StatusCode.OK:
-                logger.warning(f"{self.gyro_type}: Error during gyro bus optimization: {status}")
+                logger.warning(f"{self.gyro_type}: Error during gyro yaw frequency update: {status}")
 
-        Phoenix6Signals.register_signals(self._yaw, self._yaw_velocity)
+        status = self._gyro.optimize_bus_utilization()
+
+        if status != StatusCode.OK:
+            logger.warning(f"{self.gyro_type}: Error during gyro bus optimization: {status}")
+
+        Phoenix6Signals.register_signals(self._yaw, self._yaw_velocity,
+                                         self._roll, self._pitch)
 
     @property
     def calibrated(self) -> bool:
@@ -141,13 +153,13 @@ class Pigeon2(Gyro):
     def pitch(self) -> degrees:
         pitch_offset = 0  # TODO: Always zero?
 
-        return self._gyro.get_pitch().value - pitch_offset
+        return self._pitch.value - pitch_offset
 
     @property
     def roll(self) -> degrees:
         roll_offset = 0  # TODO: Always zero?
 
-        return self._gyro.get_roll().value - roll_offset
+        return self._roll.value - roll_offset
 
     @property
     def raw_angle(self) -> degrees:
@@ -177,7 +189,16 @@ class Pigeon2(Gyro):
         inputs.connected = StatusSignal.is_all_good(self._yaw,
                                                     self._yaw_velocity)
         inputs.yaw = math.radians(self._yaw.value_as_double)
+        inputs.yaw_timestamp = self._yaw.timestamp.time
+
         inputs.yaw_rate = math.radians(self._yaw_velocity.value_as_double)
+        inputs.yaw_rate_timestamp = self._yaw.timestamp.time
+
+        inputs.roll = math.radians(self._roll.value_as_double)
+        inputs.roll_timestamp = self._roll.timestamp.time
+
+        inputs.pitch = math.radians(self._pitch.value_as_double)
+        inputs.pitch_timestamp = self._pitch.timestamp.time
 
     def set_yaw(self, yaw_rad: radians) -> None:
         """

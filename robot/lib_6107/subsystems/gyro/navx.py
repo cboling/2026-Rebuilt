@@ -15,9 +15,9 @@
 #    Jemison High School - Huntsville Alabama                              #
 # ------------------------------------------------------------------------ #
 
+import math
 from typing import Any, Optional
 
-import math
 from wpilib import RobotBase
 from wpilib.simulation import SimDeviceSim
 from wpimath.geometry import Rotation2d
@@ -158,6 +158,9 @@ class NavX(Gyro):
             gyro_z = -gyro_z
 
         inputs.yawVelocityDegPerSec = gyro_z * RADIANS_PER_DEGREE
+
+        # TODO: If timestamps are desired, look at AdvantageKit's Java template
+        #       for the talonfx_swerve
 
     ######################
     # Simulation support

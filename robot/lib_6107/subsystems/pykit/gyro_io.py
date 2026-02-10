@@ -17,9 +17,8 @@
 
 from dataclasses import dataclass
 
-from wpimath.units import radians, radians_per_second
-
 from pykit.autolog import autolog
+from wpimath.units import radians, radians_per_second, seconds
 
 
 class GyroIO:
@@ -34,6 +33,15 @@ class GyroIO:
         connected: bool = False
         yaw: radians = 0.0
         yaw_rate: radians_per_second = 0.0
+
+        roll: radians = 0.0
+        pitch: radians = 0.0
+
+        # Following optional and only valid if non-zero
+        yaw_timestamp: seconds = 0.0
+        yaw_rate_timestamp: seconds = 0.0
+        roll_timestamp: seconds = 0.0
+        pitch_timestamp: seconds = 0.0
 
     def updateInputs(self, inputs: GyroIOInputs) -> None:
         pass
