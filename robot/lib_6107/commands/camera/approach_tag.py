@@ -98,12 +98,13 @@ class ApproachTag(BaseCommand):
 
         self._camera = camera or drivetrain.container.camera('rear' if reverse else 'front')
 
-        assert hasattr(self._camera,
-                       "x_offset"), "camera must have `x_offset` to give us the object coordinate (in degrees)"
-        assert hasattr(self._camera, "area"), "camera must have `area` to give us object size (in % of screen)"
-        assert hasattr(self._camera,
-                       "get_seconds_since_last_heartbeat"), "camera must have a `get_seconds_since_last_heartbeat"
-        assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
+        # TODO: Refactor to use pykit I/O Input values
+        # assert hasattr(self._camera,
+        #                "x_offset"), "camera must have `x_offset` to give us the object coordinate (in degrees)"
+        # assert hasattr(self._camera, "area"), "camera must have `area` to give us object size (in % of screen)"
+        # assert hasattr(self._camera,
+        #                "get_seconds_since_last_heartbeat"), "camera must have a `get_seconds_since_last_heartbeat"
+        # assert hasattr(drivetrain, "drive"), "drivetrain must have a `drive()` function, because we need a swerve drive"
 
         self.addRequirements(self._camera)
         self.addRequirements(drivetrain)

@@ -25,7 +25,7 @@ from wpilib import RobotBase
 from wpimath.geometry import Rotation2d, Translation2d, Translation3d
 from wpimath.kinematics import SwerveDrive4Kinematics
 from wpimath.trajectory import TrapezoidProfileRadians
-from wpimath.units import hertz, kilograms, lbsToKilograms, meters, meters_per_second, radians_per_second, \
+from wpimath.units import hertz, kilograms, lbsToKilograms, meters, meters_per_second, radians, radians_per_second, \
     rotationsToRadians, seconds
 
 from generated.tuner_constants import TunerConstants  # Use Tuner X constants if available
@@ -170,18 +170,18 @@ ROBORIO_USB_STATIC = "172.22.11.2"
 # Camera configurations
 
 FRONT_CAMERA_INFO = {
-    "Type": CAMERA_TYPE_LIMELIGHT,
+    "Type": CAMERA_TYPE_PHOTONVISION,
     "Label"  : "front",
-    "Name": "LimeLight",
+    "Name": "PhotonVision",
     "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
     "Heading": Rotation2d.fromDegrees(0.0),
     "Localizer": False
 }
 
 REAR_CAMERA_INFO = {
-    "Type" : CAMERA_TYPE_PHOTONVISION,
+    "Type": CAMERA_TYPE_LIMELIGHT,
     "Label": "rear",
-    "Name"   : "",
+    "Name": "LimeLight",
     "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
     "Heading": Rotation2d.fromDegrees(180.0),
     "Localizer": False
@@ -204,6 +204,21 @@ RIGHT_CAMERA_INFO = {
     "Heading": Rotation2d.fromDegrees(180.0),
     "Localizer": False
 }
+
+# Vision Pose filter limits
+# TODO: Look into the april tag heights and how Z_ERROR is actually used and obtained and
+#       see if we can calculate it from the field data on startup to be 1/2 meter above the
+#       maximum
+MAX_VISION_AMBIGUITY = 0.3
+MAX_VISION_Z_ERROR: meters = 1.5  # 0.75
+
+# Adjusted automatically based on distance and # of tags
+LINEAR_STD_DEV_BASELINE: meters = 0.02
+ANGULAR_STD_DEV_BASELINE: radians = 0.06
+
+# Multipliers to apply for MegaTag 2 observations
+LINEAR_STD_DEV_MEGATAG2_FACTOR: float = 0.5  # More stable than full 3D solve
+ANGULAR_STD_DEV_MEGATAG2_FACTOR: float = math.inf  # No rotation data available
 
 #################################################################################
 # OPENTelemetry Support

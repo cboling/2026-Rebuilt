@@ -18,16 +18,16 @@
 try:
     import logging
 
-    from typing import Optional
+    from typing import List, Optional
 
-    from wpilib import Timer
+    from wpilib import Timer, RobotController
     from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
-    from wpimath.geometry import Transform3d
-    from wpimath.units import milliseconds, seconds, degrees, percent
+    from wpimath.geometry import Transform3d, Rotation2d, Pose3d, Rotation3d
+    from wpimath.units import milliseconds, seconds, degrees, percent, degreesToRadians
 
     from ntcore import DoubleArrayTopic, DoubleTopic, DoubleEntry, IntegerTopic, \
         IntegerEntry, DoubleArrayPublisher, DoublePublisher, DoubleArrayEntry, \
-        IntegerPublisher
+        IntegerPublisher, DoubleSubscriber, DoubleArraySubscriber
 
     from limelight import Limelight
     # from limelightresults import FiducialResult, GeneralResult, DetectorResult
@@ -36,6 +36,8 @@ try:
 
     from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem, VisionTargetData
     from lib_6107.util.field import Field
+    from lib_6107.subsystems.pykit.vision_io import VisionIO, TargetObservation, \
+        PoseObservation, PoseObservationType
 
     logger = logging.getLogger(__name__)
 
@@ -81,6 +83,21 @@ try:
             #       step?
             # TODO: Below needs JSON
             #  self._camera.upload_fieldmap(self._field_layout)
+
+            # TODO: New pykit required changes
+            # TODO: Some of the subscribers or publishers may be duplicated with 'add_localizer' code that is pre-pykit (and never tested)
+            # I/O Implementation for real Limelight hardware
+            # self.rotationSupplier: Supplier<Rotation2d>     = None
+            self.orientation_publisher: DoubleArrayPublisher = self._network_table.getDoubleArrayTopic(
+                "robot_orientation_set").publish()
+
+            self.latency_subscriber: DoubleSubscriber = self._network_table.getDoubleTopic("tl").subscribe(0.0)
+            self.tx_subscriber: DoubleSubscriber = self._network_table.getDoubleTopic("tx").subscribe(0.0)
+            self.ty_subscriber: DoubleSubscriber = self._network_table.getDoubleTopic("ty").subscribe(0.0)
+            self.megatag1_subscriber: DoubleArraySubscriber = self._network_table.getDoubleArrayTopic(
+                "botpose_wpiblue").subscribe([])
+            self.megatag2_subscriber: DoubleArraySubscriber = self._network_table.getDoubleArrayTopic(
+                "botpose_orb_wpiblue").subscribe([])
 
         def _on_field_change(self, _field: AprilTagField, layout: AprilTagFieldLayout) -> None:
             """
@@ -197,6 +214,80 @@ try:
 
             pass
 
+        def updateInputs(self, inputs: VisionIO.VisionIOInputs) -> None:
+            """
+            Pykit support for AdvantageScope
+            """
+            # TODO: Tie in the heartbeat with the determination of 'connected' below
+            inputs.connected = (RobotController.getFPGATime() - self.latency_subscriber.getLastChange()) / 1000 < 250
 
+            inputs.latest_target_observation = TargetObservation(Rotation2d.fromDegrees(self.tx_subscriber.get()),
+                                                                 Rotation2d.fromDegrees(self.ty_subscriber.get()), )
+            # Update orientation for MegaTag 2
+            # TODO: self.orientationPublisher.accept({rotationSupplier.get().getDegrees(), 0.0, 0.0, 0.0, 0.0, 0.0});
+            # TODO: NetworkTableInstance.getDefault().flush(); // Increases network traffic but recommended by Limelight
+
+            # Read new pose observations from NetworkTables
+            # TODO: In java version of this, this is a set. We want a set but we need to keep order perhaps?
+            inputs.tag_ids = []
+
+            pose_observations: List[PoseObservation] = []
+            for rawSample in self.megatag1_subscriber.readQueue():
+                sample_len = len(rawSample.value)
+                if sample_len == 0:
+                    continue
+
+                # TODO: Where in the heck does 11 come from and the increment by 7
+                for i in range(11, sample_len, 7):
+                    tag_id = rawSample.value[i]
+
+                    if tag_id not in inputs.tag_ids:
+                        inputs.tag_ids.append(int(tag_id))  # TODO: Is this an int always
+
+                    # Pose contents:
+                    # - Timestamp, based on server timestamp of publish and latency
+                    # - 3D pose estimate
+                    # - Ambiguity, using only the first tag because ambiguity isn't applicable for multitag
+                    # - Tag Count
+                    # - Average tag distance
+                    # - Observation type
+                    #
+                    inputs.pose_observations.append(PoseObservation(
+                        rawSample.time * 1.0e-6 - rawSample.value[6] * 1.0e-3,
+                        self.parse_pose(rawSample.value),
+                        rawSample.value[17] if sample_len >= 18 else 0.0,
+                        int(rawSample.value[7]),
+                        rawSample.value[9],
+                        PoseObservationType.MEGATAG_1))
+
+            for rawSample in self.megatag2_subscriber.readQueue():
+                sample_len = len(rawSample.value)
+                if sample_len == 0:
+                    continue
+
+                # TODO: Where in the heck does 11 come from and the increment by 7
+                for i in range(11, sample_len, 7):
+                    tag_id = rawSample.value[i]
+
+                    if tag_id not in inputs.tag_ids:
+                        inputs.tag_ids.append(int(tag_id))  # TODO: Is this an int always
+
+                    inputs.pose_observations.append(PoseObservation(
+                        rawSample.time * 1.0e-6 - rawSample.value[6] * 1.0e-3,
+                        self.parse_pose(rawSample.value),
+                        0.0,
+                        int(rawSample.value[7]),
+                        rawSample.value[9],
+                        PoseObservationType.MEGATAG_2))
+
+        @staticmethod
+        def parse_pose(raw_limlight_array: List[float]) -> Pose3d:
+            """
+            Parses the 3D pose from a Limelight botpose array
+            """
+            return Pose3d(raw_limlight_array[0], raw_limlight_array[1], raw_limlight_array[2],
+                          Rotation3d(degreesToRadians(raw_limlight_array[3]),
+                                     degreesToRadians(raw_limlight_array[4]),
+                                     degreesToRadians(raw_limlight_array[5])))
 except ImportError as _e:
     pass

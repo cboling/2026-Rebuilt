@@ -26,8 +26,8 @@ from commands2.button import CommandXboxController, Trigger
 from commands2.sysid import SysIdRoutine
 from ntcore import NetworkTableInstance
 from phoenix6 import swerve
-from pykit.logger import Logger
 from pykit.alertlogger import AlertLogger
+from pykit.logger import Logger
 from wpilib import Alert, DriverStation, Field2d, getDeployDirectory, RobotBase, SendableChooser, SmartDashboard, \
     XboxController
 from wpimath.geometry import Rotation2d
@@ -141,15 +141,16 @@ class RobotContainer:
         ##########################################
         #   ALERTS
         #
+        # TODO: validate this all works (including shift active_
         AlertLogger.registerGroup("Alerts")
 
-        self.driverDisconnected = Alert("Driver controller disconnected (port 0)", Alert.AlertType.kWarning)
-        self.operatorDisconnected = Alert("Operator controller disconnected (port 1)", Alert.AlertType.kWarning)
-        self.deadInTheWaterAlert = Alert("No auto selected!!!", Alert.AlertType.kWarning)
+        self.driver_disconnected = Alert("Driver controller disconnected (port 0)", Alert.AlertType.kWarning)
+        self.operator_disconnected = Alert("Operator controller disconnected (port 1)", Alert.AlertType.kWarning)
+        self.dead_in_the_water_alert = Alert("No auto selected!!!", Alert.AlertType.kWarning)
 
         # TODO: also maybe a vibrate...
-        self.shiftActiveAlert = Alert("SHIFT ACTIVE!", Alert.AlertType.kInfo)
-        self.shiftActiveAlert.set(True)
+        self.shift_active_alert = Alert("SHIFT ACTIVE!", Alert.AlertType.kInfo)
+        self.shift_active_alert.set(True)
 
         ##########################################
         #   TELEMETRY
@@ -517,7 +518,7 @@ class RobotContainer:
 
     def _init_vision_subsystems(self) -> List[Subsystem]:
         camera_subsystems = []
-
+        # TODO: Do we need to prioritize the cameras so some cameras get serviced first in a multi-vision robot
         for camera_info in (FRONT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, LEFT_CAMERA_INFO):
 
             camera_subsystem, localizer_subsystem = VisionSubsystem.create(camera_info,
@@ -628,7 +629,7 @@ class RobotContainer:
         # Logger.recordOutput("Component Poses", RobotMechanism.getPoses())
 
     def update_alerts(self):
-        self.driverDisconnected.set(not DriverStation.isJoystickConnected(0))
-        self.operatorDisconnected.set(not DriverStation.isJoystickConnected(1))
+        self.driver_disconnected.set(not DriverStation.isJoystickConnected(0))
+        self.operator_disconnected.set(not DriverStation.isJoystickConnected(1))
 
-        self.deadInTheWaterAlert.set(self._auto_chooser.getSelected() == self.get_do_nothing)
+        self.dead_in_the_water_alert.set(self._auto_chooser.getSelected() == self.get_do_nothing)

@@ -18,18 +18,21 @@
 try:
     import logging
 
-    from typing import Optional
+    from typing import List, Optional
 
     from ntcore import NetworkTableInstance
     from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
-    from wpimath.geometry import Transform3d
-    from wpimath.units import milliseconds, seconds
+    from wpimath.geometry import Transform3d, Rotation2d, Pose3d
+    from wpimath.units import milliseconds, seconds, meters
 
     from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem, VisionTargetData
     from lib_6107.util.field import Field
+    from lib_6107.subsystems.pykit.vision_io import VisionIO, TargetObservation, \
+        PoseObservation, PoseObservationType
 
     from photonlibpy import PhotonCamera, PhotonPoseEstimator
-    from photonlibpy.targeting.photonPipelineResult import PhotonPipelineResult, PhotonTrackedTarget
+    from photonlibpy.targeting.photonPipelineResult import PhotonPipelineResult, PhotonTrackedTarget, \
+        MultiTargetPNPResult
 
     logger = logging.getLogger(__name__)
 
@@ -120,6 +123,80 @@ try:
 
             # Clear latest_results so we will get new results on the next pass
             self._latest_results = None
+
+        def updateInputs(self, inputs: VisionIO.VisionIOInputs) -> None:
+            """
+            Pykit support for AdvantageScope
+            """
+            inputs.connected = self._camera.isConnected()
+
+            # Read new camera observations
+            # TODO: In java version of this, this is a set. We want a set but we need to keep order perhaps?
+            inputs.tag_ids = []
+            inputs.pose_observations = []
+
+            for result in self._camera.getAllUnreadResults():
+                # Update latest target observation
+
+                if result is not None and result.hasTargets():
+                    inputs.latest_target_observation = \
+                        TargetObservation(Rotation2d.fromDegrees(result.getBestTarget().getYaw()),
+                                          Rotation2d.fromDegrees(result.getBestTarget().getPitch()), )
+                else:
+                    inputs.latest_target_observation = TargetObservation(Rotation2d(0),
+                                                                         Rotation2d(0))
+                # Add pose observation
+                multi_tag_result: MultiTargetPNPResult = result.multitagResult
+                single_target: PhotonTrackedTarget = result.getBestTarget()
+
+                if multi_tag_result is not None:
+                    # Multi-tag result processing
+                    # Calculate robot pose
+                    field_to_camera: Transform3d = multi_tag_result.estimatedPose.best
+                    field_to_robot: Transform3d = field_to_camera + self._camera_transform.inverse()
+                    robot_pose: Pose3d = Pose3d(field_to_robot.translation(), field_to_robot.rotation())
+
+                    # Calculate average tag distance
+                    total_tag_distance: meters = sum(target.bestCameraToTarget.translation().norm()
+                                                     for target in result.targets)
+                    # Add tag IDs
+                    inputs.tag_ids = multi_tag_result.fiducialIDsUsed
+
+                    # Add observation
+                    inputs.pose_observations.append(
+                        PoseObservation(result.getTimestampSeconds(),
+                                        robot_pose,
+                                        multi_tag_result.estimatedPose.ambiguity,
+                                        len(multi_tag_result.fiducialIDsUsed),
+                                        total_tag_distance / len(result.targets),
+                                        PoseObservationType.PHOTONVISION))
+
+                elif single_target is not None:
+                    # Single target acquired. Note this is also the 'best' if it was multi-target but
+                    # that is handled in the previous 'if' clause
+                    #
+                    # Calculate robot pose
+
+                    tag_pose = self._field_layout.getTagPose(single_target.fiducialId)
+                    if tag_pose:
+                        field_to_target: Transform3d = Transform3d(tag_pose.translation(), tag_pose.rotation())
+                        camera_to_target: Transform3d = single_target.bestCameraToTarget
+                        field_to_camera: Transform3d = field_to_target + camera_to_target.inverse()
+                        field_to_robot: Transform3d = field_to_camera.plus(self._camera_transform.inverse())
+
+                        robot_pose: Pose3d = Pose3d(field_to_robot.translation(), field_to_robot.rRotation())
+
+                        # Add tag ID
+                        inputs.tag_ids = [single_target.fiducialId]
+
+                        # Add observation
+                        inputs.pose_observations = [PoseObservation(result.getTimestampSeconds(),
+                                                                    robot_pose,  # 3D pose estimate
+                                                                    single_target.poseAmbiguity,  # Ambiguity
+                                                                    1,  # Tag count
+                                                                    camera_to_target.translation().norm(),
+                                                                    # Average tag distance
+                                                                    PoseObservationType.PHOTONVISION)]
 
 except ImportError as _e:
     raise
