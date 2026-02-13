@@ -520,8 +520,9 @@ class RobotContainer:
         camera_subsystems = []
         # TODO: Do we need to prioritize the cameras so some cameras get serviced first in a multi-vision robot
         for camera_info in (FRONT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, LEFT_CAMERA_INFO):
-
-            camera_subsystem, localizer_subsystem = VisionSubsystem.create(camera_info,
+            vision_input = self.robot_drive.add_vision_measurement
+            camera_subsystem, localizer_subsystem = VisionSubsystem.create(vision_input,
+                                                                           camera_info,
                                                                            self._field,
                                                                            self.robot_drive)
             if camera_subsystem is not None:

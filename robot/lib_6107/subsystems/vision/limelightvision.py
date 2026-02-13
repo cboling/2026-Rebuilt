@@ -34,7 +34,7 @@ try:
     # from lib_6107.subsystems.vision.deprecated.limelight_camera import LimelightCamera
     # from lib_6107.subsystems.vision.deprecated.limelight_localizer import LimelightLocalizer
 
-    from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem, VisionTargetData
+    from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem, VisionTargetData, VisionConsumer
     from lib_6107.util.field import Field
     from lib_6107.subsystems.pykit.vision_io import VisionIO, TargetObservation, \
         PoseObservation, PoseObservationType
@@ -43,8 +43,9 @@ try:
 
 
     class LimelightVisionSubsystem(VisionSubsystem):
-        def __init__(self, name: str, field: Field, transform: Transform3d, drivetrain: 'DriveSubsystem'):
-            super().__init__(name, field, transform, drivetrain)
+        def __init__(self, vision_input:VisionConsumer,
+                     name: str, field: Field, transform: Transform3d, drivetrain: 'DriveSubsystem'):
+            super().__init__(vision_input, name, field, transform, drivetrain)
 
             self._camera: Limelight = Limelight(name)
 
