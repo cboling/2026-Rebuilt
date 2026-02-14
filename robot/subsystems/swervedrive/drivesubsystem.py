@@ -28,11 +28,11 @@ from phoenix6 import SignalLogger, swerve, units, utils
 from phoenix6.swerve.requests import RobotCentric
 from pykit.autolog import autolog_output, autologgable_output
 from pykit.logger import Logger
-from wpilib import DriverStation, Notifier, RobotController, Field2d, RobotBase, SmartDashboard
-from wpimath.geometry import Pose3d
+from wpilib import DriverStation, Field2d, Notifier, RobotBase, RobotController, SmartDashboard
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Pose2d, Rotation2d, Rotation3d
+from wpimath.geometry import Pose3d
 from wpimath.kinematics import ChassisSpeeds, SwerveDrive4Kinematics, SwerveModulePosition, SwerveModuleState
 from wpimath.units import degrees, meters, meters_per_second, radians_per_second, rotationsToRadians, \
     seconds
@@ -387,7 +387,7 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
         self._sim_notifier = Notifier(_sim_periodic)
         self._sim_notifier.startPeriodic(self._SIM_LOOP_PERIOD)
 
-    def add_vision_measurement(self, vision_robot_pose: Pose2d, timestamp: units.second,
+    def add_vision_measurement(self, vision_robot_pose: Pose2d | Pose3d, timestamp: units.second,
                                vision_measurement_std_devs: tuple[float, float, float] | None = None):
         """
         Adds a vision measurement to the Kalman Filter. This will correct the
@@ -406,6 +406,9 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                                             and radians.
         :type vision_measurement_std_devs:  tuple[float, float, float] | None
         """
+        if isinstance(vision_robot_pose, Pose3d):
+            vision_robot_pose = vision_robot_pose.toPose2d()
+
         TunerSwerveDrivetrain.add_vision_measurement(
             self,
             vision_robot_pose,
@@ -845,10 +848,19 @@ class DriveSubsystem(Subsystem, TunerSwerveDrivetrain):
                 self._swerve_modules["back-right"].getState())
 
     #@autolog_output(key="drive/viz/Pose3d")
-    def get_robot_3d(self, pose: Pose2d, rotation: Rotation2d) -> Pose3d:
+    def get_robot_3d(self, pose: Pose2d, rotation: Rotation3d) -> Pose3d:
+        # TODO: Can we get the 'z' component?
+        #       If you are using AprilTags to determine your 3D pose on the field, this is
+        #       the most direct method to get the robot's Z position.
+        #
+        #       Limelight: Use botpose in NetworkTables, which returns an array of [x, y, z, roll,
+        #              pitch, yaw]. The 3rd element (index 2) is the Z position in meters, generally
+        #              representing the height of the camera above the floor.
+        #
+        #       PhotonVision: Use PhotonPoseEstimator and get the bestCameraToTarget transform to
+        #              calculate the robot's 3D position.
 
-        rotation3d = Rotation3d(0.0, 0.0, rotation.radians())  # roll and pitch set to 0.0
-        return Pose3d(pose.X(), pose.Y(), 0.0, rotation3d)
+        return Pose3d(pose.X(), pose.Y(), 0.0, rotation)
 
     ##########################################################
     # TODO: All the following are related to team 2429 and pathplanner. These have not been tested and

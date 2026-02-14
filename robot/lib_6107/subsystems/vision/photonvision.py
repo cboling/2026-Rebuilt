@@ -18,13 +18,14 @@
 try:
     import logging
 
-    from typing import List, Optional
+    from typing import Dict, List, Any, Optional
 
     from ntcore import NetworkTableInstance
     from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
     from wpimath.geometry import Transform3d, Rotation2d, Pose3d
     from wpimath.units import milliseconds, seconds, meters
 
+    import constants
     from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem, VisionTargetData, VisionConsumer
     from lib_6107.util.field import Field
     from lib_6107.subsystems.pykit.vision_io import VisionIO, TargetObservation, \
@@ -38,20 +39,16 @@ try:
 
 
     class PhotonVisionSubsystem(VisionSubsystem):
-        def __init__(self, vision_input: VisionConsumer,
-                     name: str, field: Field, transform: Transform3d, drivetrain: 'DriveSubsystem'):
-            super().__init__(vision_input, name, field, transform, drivetrain)
+        def __init__(self, info: Dict[str, Any], drivetrain: 'DriveSubsystem', field: Field):
+            super().__init__(info, drivetrain, field)
 
-            self._camera: PhotonCamera = PhotonCamera(name)
+            self._camera: PhotonCamera = PhotonCamera(self._name)
             self._latest_results: Optional[PhotonPipelineResult] = None
+            self._estimator: Optional[PhotonPoseEstimator] = None
 
-            # self._sim_camera = TODO: More work here
-
-            # In simulation, load the field layout
-            # TODO: Is there a way to query existing field layout so we can possibly skip this
-            #       step?
-            self._estimator: PhotonPoseEstimator = PhotonPoseEstimator(self._field_layout,
-                                                                       self._camera_transform)
+            if self._estimate:
+                self._estimator: PhotonPoseEstimator = PhotonPoseEstimator(self._field_layout,
+                                                                           self._camera_transform)
             # Register for field layout changes
             field.register_layout_callback(self._on_field_change)
 
@@ -59,7 +56,8 @@ try:
             """
             Operator selected a different field layout.
             """
-            self._estimator.fieldTags = layout
+            if self._estimator is not None:
+                self._estimator.fieldTags = layout
 
         @property
         def latency(self) -> Optional[milliseconds]:
@@ -120,6 +118,7 @@ try:
             # ...
 
             # Update estimator with simulated data
+            # if self._estimator is not None:
             # TODO: elf._estimator.update()
 
             # Clear latest_results so we will get new results on the next pass
@@ -142,7 +141,7 @@ try:
                 if result is not None and result.hasTargets():
                     inputs.latest_target_observation = \
                         TargetObservation(Rotation2d.fromDegrees(result.getBestTarget().getYaw()),
-                                          Rotation2d.fromDegrees(result.getBestTarget().getPitch()), )
+                                          Rotation2d.fromDegrees(result.getBestTarget().getPitch()))
                 else:
                     inputs.latest_target_observation = TargetObservation(Rotation2d(0),
                                                                          Rotation2d(0))
@@ -183,9 +182,9 @@ try:
                         field_to_target: Transform3d = Transform3d(tag_pose.translation(), tag_pose.rotation())
                         camera_to_target: Transform3d = single_target.bestCameraToTarget
                         field_to_camera: Transform3d = field_to_target + camera_to_target.inverse()
-                        field_to_robot: Transform3d = field_to_camera.plus(self._camera_transform.inverse())
+                        field_to_robot: Transform3d = field_to_camera + self._camera_transform.inverse()
 
-                        robot_pose: Pose3d = Pose3d(field_to_robot.translation(), field_to_robot.rRotation())
+                        robot_pose: Pose3d = Pose3d(field_to_robot.translation(), field_to_robot.rotation())
 
                         # Add tag ID
                         inputs.tag_ids = [single_target.fiducialId]

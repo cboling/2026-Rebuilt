@@ -30,7 +30,7 @@ from pykit.alertlogger import AlertLogger
 from pykit.logger import Logger
 from wpilib import Alert, DriverStation, Field2d, getDeployDirectory, RobotBase, SendableChooser, SmartDashboard, \
     XboxController
-from wpimath.geometry import Rotation2d
+from wpimath.geometry import Rotation2d, Rotation3d
 from wpimath.units import meters, meters_per_second, radians_per_second, rotationsToRadians
 
 import constants
@@ -520,17 +520,12 @@ class RobotContainer:
         camera_subsystems = []
         # TODO: Do we need to prioritize the cameras so some cameras get serviced first in a multi-vision robot
         for camera_info in (FRONT_CAMERA_INFO, REAR_CAMERA_INFO, RIGHT_CAMERA_INFO, LEFT_CAMERA_INFO):
-            vision_input = self.robot_drive.add_vision_measurement
-            camera_subsystem, localizer_subsystem = VisionSubsystem.create(vision_input,
-                                                                           camera_info,
-                                                                           self._field,
-                                                                           self.robot_drive)
+
+            camera_subsystem = VisionSubsystem.create(camera_info, self.robot_drive,
+                                                      self._field)
             if camera_subsystem is not None:
                 camera_subsystems.append(camera_subsystem)
                 self._cameras[camera_info["Label"]] = camera_subsystem
-
-            if localizer_subsystem is not None:
-                camera_subsystems.append(localizer_subsystem)
 
         return camera_subsystems
 
@@ -612,7 +607,9 @@ class RobotContainer:
 
         RobotState.periodic(drive.pose,
                             Rotation2d(drive.gyro.inputs.yaw),
-                            drive.get_robot_3d(drive.pose, Rotation2d(drive.gyro.inputs.yaw)),
+                            drive.get_robot_3d(drive.pose, Rotation3d.fromDegrees(drive.gyro.inputs.roll,
+                                                                                  drive.gyro.inputs.pitch,
+                                                                                  drive.gyro.inputs.yaw)),
                             drive.gyro.inputs.yaw_timestamp,
                             drive.get_angular_velocity(),
                             drive.get_field_relative_speeds(),

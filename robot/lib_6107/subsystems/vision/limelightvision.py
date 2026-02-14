@@ -18,7 +18,7 @@
 try:
     import logging
 
-    from typing import List, Optional
+    from typing import List, Optional, Dict, Any
 
     from wpilib import Timer, RobotController
     from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
@@ -43,11 +43,10 @@ try:
 
 
     class LimelightVisionSubsystem(VisionSubsystem):
-        def __init__(self, vision_input:VisionConsumer,
-                     name: str, field: Field, transform: Transform3d, drivetrain: 'DriveSubsystem'):
-            super().__init__(vision_input, name, field, transform, drivetrain)
+        def __init__(self, info: Dict[str, Any], drivetrain: 'DriveSubsystem', field: Field):
+            super().__init__(info, drivetrain, field)
 
-            self._camera: Limelight = Limelight(name)
+            self._camera: Limelight = Limelight(self._name)
 
             self._path: str = self._network_table.getPath()
 

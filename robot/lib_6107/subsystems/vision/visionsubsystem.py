@@ -17,18 +17,18 @@
 
 import logging
 import math
-from typing import Any, Dict, Optional, Tuple, List, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 from commands2 import Subsystem
 from ntcore import NetworkTable, NetworkTableInstance
+from pykit.logger import Logger
 from robotpy_apriltag import AprilTagDetector, AprilTagField, AprilTagFieldLayout
 from wpilib import Alert, RobotBase, SmartDashboard
-from wpimath.geometry import Rotation2d, Transform3d, Pose3d, Pose2d
+from wpimath.geometry import Pose2d, Pose3d, Transform3d
 from wpimath.units import degrees, milliseconds, percent, seconds
-from pykit.logger import Logger
 
 import constants
-from lib_6107.subsystems.pykit.vision_io import VisionIO,PoseObservation, PoseObservationType
+from lib_6107.subsystems.pykit.vision_io import PoseObservation, PoseObservationType, VisionIO
 from lib_6107.util.field import Field
 
 logger = logging.getLogger(__name__)
@@ -77,9 +77,8 @@ class VisionSubsystem(Subsystem, VisionIO):
     TODO: Add multi-camera per VisionSubsystem support. Along these lines, we could just have a single
           vision subsystem, but have it run any combination of cameras...
     """
-    def __init__(self, vision_input: VisionConsumer,
-                camera_name: str, field: Field,
-                transform: Transform3d, drivetrain: 'DriveSubsystem'):
+
+    def __init__(self, info: Dict[str, Any], drivetrain: 'DriveSubsystem', field: Field):
         Subsystem.__init__(self)
         VisionIO().__init__()
 
@@ -87,14 +86,14 @@ class VisionSubsystem(Subsystem, VisionIO):
         # the beginning of the Autonomous or Teleop periods
         self._april_tag_field: Optional[AprilTagField] = field.field
         self._field_layout: Optional[AprilTagFieldLayout] = field.layout
-        self._name = camera_name
+        self._name = info.get("Name", info.get("Type"))
         self._robot = drivetrain.robot
-        self._vision_input = vision_input
-
-        self._camera_transform: Transform3d = transform
+        self._estimate = info.get("Localizer", False)
+        self._std_dev_factor = info.get("Trust", 0.1)
+        self._camera_transform: Transform3d = info.get("Transform")
         self._drivetrain: 'DriveSubsystem' = drivetrain
         self._is_simulation: bool = RobotBase.isSimulation()
-
+        # self._vision_input = vision_input TODO: Pass in 'AddVisionMeasurement' callable here?
         self._inputs = VisionIO.VisionIOInputs()
 
         # April tag setup
@@ -103,29 +102,18 @@ class VisionSubsystem(Subsystem, VisionIO):
 
         # NetworkTable setup
         nt_instance = NetworkTableInstance.getDefault()
-        self._network_table: NetworkTable = nt_instance.getTable(camera_name)
+        self._network_table: NetworkTable = nt_instance.getTable(self._name)
 
         # TODO: Also look at AdvantageKit java 'Vision.java' for additional work
         #       needed here.
         # Initialize disconnected alerts
         self._disconnected_alert = Alert(f"Vision camera {self.name}", Alert.AlertType.kWarning)
 
-        # TODO: Make following a programable value so we can trust some cameras more than others
-        self._camera_std_dev_factors: float = 1.0
-
     @staticmethod
-    def create(vision_input: VisionConsumer,
-               info: Dict[str, Any], field: Field,
-               drivetrain: 'DriveSubsystem') -> Tuple[Optional['VisionSubsystem'], Optional['Subsystem']]:
+    def create(info: Dict[str, Any], drivetrain: 'DriveSubsystem', field: Field) -> VisionSubsystem | None:
 
         camera_type = info.get("Type", constants.CAMERA_TYPE_NONE)
-        localizer = info.get("Localizer")
-        transform: Transform3d = info.get("Pose")
-        camera_name = info.get("Name", camera_type)
-        heading = info.get("Heading", Rotation2d.fromDegrees(0))
-
-        camera_subsystem: Optional['VisionSubsystem'] = None
-        localizer_subsystem: Optional['Subsystem'] = None
+        camera_subsystem: Optional[VisionSubsystem] = None
 
         match constants.ROBOT_MODE:
             case constants.RobotModes.REAL:
@@ -143,24 +131,27 @@ class VisionSubsystem(Subsystem, VisionIO):
             case constants.CAMERA_TYPE_LIMELIGHT:
                 # TODO: For limelight, allow multiple cameras to be specified
                 from lib_6107.subsystems.vision.limelightvision import LimelightVisionSubsystem
-                camera_subsystem = LimelightVisionSubsystem(vision_input, camera_name, field, transform, drivetrain)
-                # self.localizer = LimelightLocalizer(self, self.robot_drive)
-                # self.localizer.addCamera(self.camera,
-                #                          cameraPoseOnRobot=pose["Pose"],
-                #                          cameraHeadingOnRobot=pose["Heading"])
+                camera_subsystem = LimelightVisionSubsystem(info, drivetrain, field)
 
             case constants.CAMERA_TYPE_PHOTONVISION:
                 try:
-                    from lib_6107.subsystems.vision.photonvision import PhotonVisionSubsystem
-                    camera_subsystem = PhotonVisionSubsystem(vision_input, camera_name, field, transform, drivetrain)
+                    match constants.ROBOT_MODE:
+                        case constants.RobotModes.REAL:
+                            from lib_6107.subsystems.vision.photonvision import PhotonVisionSubsystem
+                            camera_subsystem = PhotonVisionSubsystem(info, drivetrain, field)
 
-                    # if localizer:
-                    #     pass # TODO: Need to support
-                    #     localizer_subsystem = PhotonLocalizer(self, self.robot_drive, "2025-reefscape.json")
+                        case constants.RobotModes.SIMULATION:
+                            from lib_6107.subsystems.vision.photonvision_sim import PhotonVisionSubsystemSim
+                            camera_subsystem = PhotonVisionSubsystemSim(info, drivetrain, field)
+
+                        case constants.RobotModes.REPLAY:
+                            from lib_6107.subsystems.vision.photonvision_sim import PhotonVisionSubsystemSim
+                            camera_subsystem = PhotonVisionSubsystemSim(info, drivetrain, field)
+
                 except ImportError as e:
-                    logger.error(f"PhotonVisionSubsystem not found, camera {camera_name}: {e}")
+                    logger.error(f"PhotonVisionSubsystem not found, camera {info.get("Name", "n/a")}: {e}")
 
-        return camera_subsystem, localizer_subsystem
+        return camera_subsystem
 
     @property
     def name(self) -> str:
@@ -238,6 +229,8 @@ class VisionSubsystem(Subsystem, VisionIO):
         inputs: VisionIO.VisionIOInputs = self.inputs
 
         self.updateInputs(inputs)
+        # TODO: Get this working.  TargetObservation failing  Logger.processInputs(f"Vision/Camera/{self.name}", inputs)
+
         # TODO: Once one subsystem supports multiple cameras, need to track 'all' poses
         #       instead of just one camera's worth.  See AdvantageKit vision.java example
         # # Initialize logging values
@@ -293,10 +286,13 @@ class VisionSubsystem(Subsystem, VisionIO):
             if reject_pose:
                 continue
 
-            if self._vision_input:
+            if self._estimate:
                 # Calculate standard deviations
                 # TODO: The CTRE drivetrain also supports vision standard deviations.  See how this and our
                 #       new vision constants interact with those values
+                #
+                # TODO: Validate formulas below
+                #
                 std_dev_factor: float = math.pow(observation.avg_tag_distance, 2.0) / observation.tag_count
                 linear_std_dev: float = constants.LINEAR_STD_DEV_BASELINE * std_dev_factor
                 angular_std_dev: float = constants.ANGULAR_STD_DEV_BASELINE * std_dev_factor
@@ -306,14 +302,12 @@ class VisionSubsystem(Subsystem, VisionIO):
                     angular_std_dev *= constants.ANGULAR_STD_DEV_MEGATAG2_FACTOR
 
                 # TODO: Support sending to drivetrain vision measurements here instead of elsewhere
+                linear_std_dev *= self._std_dev_factor
+                angular_std_dev *= self._std_dev_factor
 
-                linear_std_dev *= self._camera_std_dev_factors
-                angular_std_dev *= self._camera_std_dev_factors
-
-                # Send vision observation       # TODO: Validate call tuples belos
-                self._vision_input(observation.pose.toPose2d(), observation.timestamp,
-                                   (linear_std_dev, linear_std_dev, angular_std_dev))
-
+                # Send vision observation
+                self._drivetrain.add_vision_measurement(observation.pose, observation.timestamp,
+                                                        (std_dev_factor, linear_std_dev, angular_std_dev))
         # Log camera metadata
         Logger.recordOutput(f"Vision/Camera/{self.name}/TagPoses", tag_poses)
         Logger.recordOutput(f"Vision/Camera/{self.name}/RobotPoses", robot_poses)

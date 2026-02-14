@@ -22,11 +22,11 @@ import os
 from enum import Enum, IntEnum, unique
 
 from wpilib import RobotBase
-from wpimath.geometry import Rotation2d, Translation2d, Translation3d
+from wpimath.geometry import Rotation3d, Transform3d, Translation2d, Translation3d
 from wpimath.kinematics import SwerveDrive4Kinematics
 from wpimath.trajectory import TrapezoidProfileRadians
-from wpimath.units import hertz, kilograms, lbsToKilograms, meters, meters_per_second, radians, radians_per_second, \
-    rotationsToRadians, seconds
+from wpimath.units import degreesToRadians, hertz, inchesToMeters, kilograms, lbsToKilograms, meters, meters_per_second, \
+    radians, radians_per_second, rotationsToRadians, seconds
 
 from generated.tuner_constants import TunerConstants  # Use Tuner X constants if available
 from lib_6107.constants import *
@@ -37,7 +37,6 @@ class RobotModes(Enum):
     REAL = 1
     SIMULATION = 2
     REPLAY = 3
-
 
 SIM_MODE = (
     RobotModes.REPLAY if "LOG_PATH" in os.environ and os.environ["LOG_PATH"] != ""
@@ -170,39 +169,43 @@ ROBORIO_USB_STATIC = "172.22.11.2"
 # Camera configurations
 
 FRONT_CAMERA_INFO = {
-    "Type": CAMERA_TYPE_PHOTONVISION,
-    "Label"  : "front",
-    "Name": "PhotonVision",
-    "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(0.0),
-    "Localizer": False
+    "Type"     : CAMERA_TYPE_PHOTONVISION,
+    "Label"    : "front",
+    "Name"     : "PhotonVision",
+    "Transform": Transform3d(Translation3d(x=inchesToMeters(-5.0), y=inchesToMeters(0.0), z=inchesToMeters(12.0)),
+                             Rotation3d(0.0, 0.0, degreesToRadians(0.0))),
+    "Localizer": False,
+    "Trust"    : 1.0  # [0.0..1.0] More trusted cameras are closer to 1.0
 }
 
 REAR_CAMERA_INFO = {
-    "Type": CAMERA_TYPE_LIMELIGHT,
-    "Label": "rear",
-    "Name": "LimeLight",
-    "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(180.0),
-    "Localizer": False
+    "Type"     : CAMERA_TYPE_LIMELIGHT,
+    "Label"    : "rear",
+    "Name"     : "LimeLight",
+    "Transform": Transform3d(Translation3d(x=inchesToMeters(-6.0), y=inchesToMeters(0.0), z=inchesToMeters(12.0)),
+                             Rotation3d(0.0, 0.0, degreesToRadians(180.0))),
+    "Localizer": False,
+    "Trust"    : 1.0  # [0.0..1.0] More trusted cameras are closer to 1.0
 }
 
 LEFT_CAMERA_INFO = {
-    "Type"   : CAMERA_TYPE_NONE,
-    "Label"  : "left",
-    "Name"   : "",
-    "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(0.0),
-    "Localizer": False
+    "Type"     : CAMERA_TYPE_NONE,
+    "Label"    : "left",
+    "Name"     : "",
+    "Transform": Transform3d(Translation3d(x=inchesToMeters(0), y=inchesToMeters(0), z=inchesToMeters(0)),
+                             Rotation3d(0.0, 0.0, degreesToRadians(90.0))),
+    "Localizer": False,
+    "Trust"    : 1.0  # [0.0..1.0] More trusted cameras are closer to 1.0
 }
 
 RIGHT_CAMERA_INFO = {
-    "Type"   : CAMERA_TYPE_NONE,
-    "Label"  : "right",
-    "Name"   : "",
-    "Pose"   : Translation3d(x=0.40, y=-0.15, z=0.5),
-    "Heading": Rotation2d.fromDegrees(180.0),
-    "Localizer": False
+    "Type"     : CAMERA_TYPE_NONE,
+    "Label"    : "right",
+    "Name"     : "",
+    "Transform": Transform3d(Translation3d(x=inchesToMeters(0), y=inchesToMeters(0), z=inchesToMeters(0)),
+                             Rotation3d(0.0, 0.0, degreesToRadians(270.0))),
+    "Localizer": False,
+    "Trust"    : 1.0  # [0.0..1.0] More trusted cameras are closer to 1.0
 }
 
 # Vision Pose filter limits
