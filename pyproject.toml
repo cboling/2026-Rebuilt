@@ -1,0 +1,58 @@
+# ------------------------------------------------------------------------ #
+#      o-o      o                o                                         #
+#     /         |                |                                         #
+#    O     o  o O-o  o-o o-o     |  oo o--o o-o o-o                        #
+#     \    |  | |  | |-' |   \   o | | |  |  /   /                         #
+#      o-o o--O o-o  o-o o    o-o  o-o-o--O o-o o-o                        #
+#             |                           |                                #
+#          o--o                        o--o                                #
+#                        o--o      o         o                             #
+#                        |   |     |         |  o                          #
+#                        O-Oo  o-o O-o  o-o -o-    o-o o-o                 #
+#                        |  \  | | |  | | |  |  | |     \                  #
+#                        o   o o-o o-o  o-o  o  |  o-o o-o                 #
+#                                                                          #
+#    Jemison High School - Huntsville Alabama                              #
+# ------------------------------------------------------------------------ #
+[project]
+name = "2026-Rebuilt"
+version = "0.1.0"
+description = "Team 6107 FRC Robot Code"
+readme = "README.md"
+requires-python = "==3.14"
+
+# Use this configuration file to control what RobotPy packages are installed
+# on your RoboRIO
+#
+[tool.robotpy]
+
+# Version of robotpy this project depends on
+robotpy_version = "2026.2.1"
+
+# Which extra RobotPy components should be installed
+# -> equivalent to `pip install robotpy[extra1, ...]
+components = [
+    "apriltag",
+    "commands2",
+    "cscore",
+    "rev",
+    "pathplannerlib",
+    "phoenix6",
+    "sim",
+    "pykit"
+]
+
+# Other pip packages to install
+requires = [
+    "photonlibpy==2026.2.2",
+    "limelightlib-python==0.9.6",
+    "pyntcore==2026.2.1",
+    "chardet== 5.2.0"
+]
+
+# List of paths to include
+include_paths = [
+    "lib_6101",
+    "robot_2026",
+    "deploy"
+]
