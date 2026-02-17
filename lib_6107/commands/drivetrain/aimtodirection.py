@@ -28,8 +28,8 @@ from wpilib import SmartDashboard
 from wpimath.geometry import Rotation2d
 
 from lib_6107.commands.command import BaseCommand
-from subsystems.swervedrive.constants import AutoConstants
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.constants import AutoConstants
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class AimToDirectionConstants:

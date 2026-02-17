@@ -28,7 +28,7 @@ from wpimath.geometry import Rotation2d
 
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirection, AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class FollowObject(commands2.Command):

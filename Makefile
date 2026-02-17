@@ -22,7 +22,7 @@ SHELL = bash -eu -o pipefail
 # Variables
 THIS_MAKEFILE	:= $(abspath $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 WORKING_DIR		:= $(dir $(THIS_MAKEFILE))
-PACKAGE_DIR     := $(WORKING_DIR)robot
+PACKAGE_DIR     := $(WORKING_DIR)
 TEST_DIR        := $(WORKING_DIR)tests
 
 include .make/setup.mk
@@ -151,6 +151,7 @@ clean:		## Cleanup directory of build and test artifacts
 	@ -find . -name 'junit-report.xml' | xargs rm -rf
 	@ -find . -name 'coverage.xml' | xargs rm -rf
 	@ -find . -name '*.log' | xargs rm -rf
+	@ -find . -name '*.wpilog' | xargs rm -rf
 	@ -find . -name '._.DS_Store' | xargs rm -rf
 	@ -find . -name 'ctre_sim' | xargs rm -rf
 

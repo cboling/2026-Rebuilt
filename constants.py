@@ -111,29 +111,32 @@ DriveKinematics = SwerveDrive4Kinematics(
 @unique
 class DeviceID(IntEnum):
     # Drivetrain and IMU is provided already via Tuner X
-    DRIVETRAIN_LEFT_FRONT_TURNING_ID = 21
-    DRIVETRAIN_LEFT_FRONT_DRIVING_ID = 22
-    DRIVETRAIN_LEFT_FRONT_ENCODER_ID = 31
+    DRIVETRAIN_LEFT_FRONT_TURNING_ID = TunerConstants._front_left_steer_motor_id
+    DRIVETRAIN_LEFT_FRONT_DRIVING_ID = TunerConstants._front_left_drive_motor_id
+    DRIVETRAIN_LEFT_FRONT_ENCODER_ID = TunerConstants._front_left_encoder_id
 
-    DRIVETRAIN_RIGHT_FRONT_TURNING_ID = 23
-    DRIVETRAIN_RIGHT_FRONT_DRIVING_ID = 24
-    DRIVETRAIN_RIGHT_FRONT_ENCODER_ID = 32
+    DRIVETRAIN_RIGHT_FRONT_TURNING_ID = TunerConstants._front_right_steer_motor_id
+    DRIVETRAIN_RIGHT_FRONT_DRIVING_ID = TunerConstants._front_right_drive_motor_id
+    DRIVETRAIN_RIGHT_FRONT_ENCODER_ID = TunerConstants._front_right_encoder_id
 
-    DRIVETRAIN_LEFT_REAR_TURNING_ID = 25
-    DRIVETRAIN_LEFT_REAR_DRIVING_ID = 26
-    DRIVETRAIN_LEFT_REAR_ENCODER_ID = 33
+    DRIVETRAIN_LEFT_REAR_TURNING_ID = TunerConstants._back_left_steer_motor_id
+    DRIVETRAIN_LEFT_REAR_DRIVING_ID = TunerConstants._back_left_drive_motor_id
+    DRIVETRAIN_LEFT_REAR_ENCODER_ID = TunerConstants._back_left_encoder_id
 
-    DRIVETRAIN_RIGHT_REAR_TURNING_ID = 27
-    DRIVETRAIN_RIGHT_REAR_DRIVING_ID = 28
-    DRIVETRAIN_RIGHT_REAR_ENCODER_ID = 34
+    DRIVETRAIN_RIGHT_REAR_TURNING_ID = TunerConstants._back_right_steer_motor_id
+    DRIVETRAIN_RIGHT_REAR_DRIVING_ID = TunerConstants._back_right_drive_motor_id
+    DRIVETRAIN_RIGHT_REAR_ENCODER_ID = TunerConstants._back_right_encoder_id
 
-    GYRO_DEVICE_ID = 35
+    GYRO_DEVICE_ID = TunerConstants._pigeon_id
 
     # Shooter
-    SHOOTER_DEVICE_ID = 10
+    SHOOTER_DEVICE_ID = 30
 
     # Intake Subsystem
-    INTAKE_DEVICE_ID = 11
+    INTAKE_DEVICE_ID = 31
+
+    # Climber Subsystem
+    CLIMBER_DEVICE_ID = 33
 
 
 #################################################################################

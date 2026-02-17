@@ -32,8 +32,8 @@ from wpimath.units import degrees
 from constants import MAX_SPEED
 from lib_6107.commands.command import BaseCommand
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
-from subsystems.swervedrive.constants import AutoConstants
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.constants import AutoConstants
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class GoToPointConstants:

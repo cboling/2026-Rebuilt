@@ -17,7 +17,7 @@ from lib_6107.commands.command import BaseCommand
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirectionConstants
 from lib_6107.commands.drivetrain.gotopoint import GoToPointConstants
 from lib_6107.subsystems.vision.visionsubsystem import VisionSubsystem
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class Tunable:

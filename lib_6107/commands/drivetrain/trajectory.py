@@ -32,8 +32,8 @@ from lib_6107.commands.command import BaseCommand
 from lib_6107.commands.drivetrain.aimtodirection import AimToDirection
 from lib_6107.commands.drivetrain.gotopoint import GoToPoint
 from lib_6107.commands.drivetrain.swervetopoint import SwerveToPoint
-from subsystems.swervedrive.constants import AutoConstants, DriveConstants
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.constants import AutoConstants, DriveConstants
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 FIELD_WIDTH = 8.052
 FIELD_LENGTH = 17.55

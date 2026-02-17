@@ -92,7 +92,7 @@ class TunerConstants:
     _invert_left_side = False
     _invert_right_side = True
 
-    _pigeon_id = 22
+    _pigeon_id = 32
 
     # These are only used for simulation
     _steer_inertia: units.kilogram_square_meter = 0.01
@@ -231,7 +231,7 @@ class TunerConstants:
         Creates a CommandSwerveDrivetrain instance.
         This should only be called once in your robot program.
         """
-        from subsystems.swervedrive.drivesubsystem import DriveSubsystem as CommandSwerveDrivetrain
+        from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem as CommandSwerveDrivetrain
 
         modules = [TunerConstants.front_left, TunerConstants.front_right, TunerConstants.back_left,
                    TunerConstants.back_right]

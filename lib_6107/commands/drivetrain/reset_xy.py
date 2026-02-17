@@ -23,7 +23,7 @@ from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 from wpimath.units import degrees, meters
 
 from lib_6107.commands.command import BaseCommand
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class ResetXY(BaseCommand):

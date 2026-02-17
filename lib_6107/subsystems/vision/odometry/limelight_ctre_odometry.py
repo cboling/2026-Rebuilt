@@ -22,7 +22,7 @@ from ntcore import NetworkTable, NetworkTableInstance
 from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 from wpimath.units import meters
 
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class LimeLightCtreLocalizer(Subsystem):

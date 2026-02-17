@@ -44,7 +44,7 @@ from generated.tuner_constants import TunerSwerveDrivetrain
 from lib_6107.subsystems.gyro.gyro import Gyro
 from lib_6107.subsystems.pykit.ctre_swervedrive import CtreSwerveModule as SwerveModule
 from lib_6107.subsystems.pykit.robot_state import RobotState
-from subsystems.swervedrive.constants import DriveConstants
+from robot_2026.subsystems.swervedrive.constants import DriveConstants
 from util.logtracer import LogTracer
 
 try:

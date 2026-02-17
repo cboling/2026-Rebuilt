@@ -25,7 +25,7 @@ from commands2 import Command
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Translation2d
 
-from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
 
 class PointTowardsLocation(Command):

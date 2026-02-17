@@ -32,7 +32,7 @@ class BaseCommand(Command):
         self.setName(self.get_class_name())
 
         from robotcontainer import RobotContainer
-        from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+        from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
         if not isinstance(target, (RobotContainer, DriveSubsystem)):
             raise ValueError(f"target must be a subclass of RobotContainer or DriveSubsystem")
@@ -56,7 +56,7 @@ class BaseCommand(Command):
         Called just before this Command runs the first time
         """
         from robotcontainer import RobotContainer
-        from subsystems.swervedrive.drivesubsystem import DriveSubsystem
+        from robot_2026.subsystems.swervedrive.drivesubsystem import DriveSubsystem
 
         if isinstance(self._target, RobotContainer):
             self._container: RobotContainer = self._target
