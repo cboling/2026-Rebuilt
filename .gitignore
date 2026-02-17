@@ -227,7 +227,8 @@ __marimo__/
 
 # Project specific
 robot/*.json
-/robot/deploy/swerve/
-/robot/ctre_sim/
+/deploy/swerve/
+/ctre_sim/
 /vendordeps/WPILibNewCommands.json
-/robot/logs/
+/logs/
+/pyLogs/

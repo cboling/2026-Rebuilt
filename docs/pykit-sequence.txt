@@ -1,0 +1,108 @@
+#  Follows WestWood 2026 startup.  Starting with 'sim'
+
+Startup:
+    MentorBot (main robot class) init is called
+        Records "Robot" as logger meta data
+        Does RobotMode 'match' (which we are in sim)
+        Starts the logger
+
+        Creates the RobotContainer()        # We create the robotcontainer during RobotInit
+
+            Creates all the subsystems      # **** Does something special if in replay?
+                                            #      sort of 'IO' init only...
+                DriveSubsystem
+                    sets  self.io = DriveIO()
+                    sets  self.inputs = DriveIO.DriveIOInputs()
+                            Their swerve modules are derived from the SwerveModule IO    ** TODO Start to do with ours as we did with gyro
+
+                    sets lots of initial values
+
+                    if simulation.
+                        creates a sim VelocityGetter. (NetworkTable subscription)   ***
+                        which is tied to the 'chassis speed' function that has an
+                        @autolog_output set
+            Register 'Alerts'
+            sets 'shiftAllerts set to true'
+
+    RobotInit() is called'
+        sets signal logging auto-log to False
+        disables all livewindow telemetry
+        sets up Command auto-log capabilities for initialize finish and interrupt
+
+        sets up some pathplanner logging
+
+    Since simulation PhysicsEngine is initialized:
+        Their drive sim does not use CTRE's built in simulation. So may need this
+        for us on another project.
+
+        Calls RobotState class method and has these that is connect to
+            Registers SIM reset listeners.
+            Registers SIM Pose listeners.
+            TODO: Any usefulness for this in our code (the logic)
+            TODO: Could be useful if we can restart simulation or if this is need for replay and we
+                do not have to reload.
+
+        Almost immediately, get a call to 'chassisSpeeds' due to NT4 update. This acceses
+        a 'fieldSpeeds' attribute of the drivetrain. This is a class from the wpilib kinematics
+        module. Also is available in pathplanner, but drivetrain uses wpilib.
+
+        Looking at our existing code. Have the ctre Telemetry hooking into pathplanner as well but
+        we have that disabled. So getting what it has and what westwood has may be something
+        that would be very useful.
+
+        ** I accommodated for it in our 'drive' command that centralizes manual driveing
+
+        Aside.  Here is what they have auto-logged with the @autolog_output in their drivetrain
+                Note that the prefix is 'Robot' or 'drive' and tends to tell if measurement is robot-centric
+                or field-centric.
+
+                The 'AutoLog' decorated functions are called by pykit in the 'periodicAfterUse' that is
+                called in the early 'startCOmpetition' before the call to 'StartReceivers' and also
+                just before the call to the HAL to say we are ready to go.
+
+                So all the following get an early 'start' snapshot of all settings.
+
+            getSwerveExpectedState()(key="drive/swerve/expected") -> Tuple[SwerveModuleState]
+
+            getRobotRelativeSpeeds()(key="Robot/relSpeeds") -> ChassisSpeeds
+
+            getFieldRelativeSpeeds()(key="Robot/speeds") -> ChassisSpeeds
+
+            getModuleStates()(key="drive/swerve/real") -> Tuple[SwerveModuleState]
+
+            getAngularVelocity()(key="Robot/velocity") -> RadiansPerSecond
+
+            chassisSpeeds()(key="drive/fieldSpeeds") -> ChassisSpeeds
+                Called on manual drive updates and from the waypoint command. We
+                have this in our 'drive' command.  Should be okay here but may
+                want to dig into their command structure some more
+
+          For direct calls in drivetrain code to 'Logger' functions we have:
+             'periodic' -> Logger.processInputs and others
+             'arcadeDriveWithSpeeds' -> drive/swerve/commandedSpeeds  Tied into waypoint command
+                                and drivewithpathplanned (which is their callback in pathplanner config init)
+
+
+**********************   Now we are into the 'periodic' portion of our show ****************
+
+    RobotPeriodic is called (part of normal sequence) and..
+
+        LogTracer  resetOuter called.  Need to look at this but looks like how it
+        collects start of something and eveutnal completion.                          *** Our code needs to do this
+
+        Westwood has a 'container period' that they call from RobotPeriodic (before their
+        commmand scheduler (in-line) call.  This feeds into their RobotState they
+        maintain and it does some logging of the current state. This includes items
+        that are subsystems.  So not sure if they are logging too much since subsystems get
+        their own periodic call.  Maybe it is a gut-check call.
+
+          Currently have a placeholder in our code for this
+
+          The 'RobotMechanisms' returns the 3d Poses for their devices (not coded but looks like what we want)
+
+    Then they command scheduler is ran.  So the subsystems 'periodic' calls are performed
+
+        DriveSubsystem 'periodic'  - Starts log trace, does IO Update/update inputs. Their gyro
+           is part of the drive and it does updates there. Ours is a separate subsystem
+
+          ** START BACK HERE.  THIS IS KEY TO SAVING OR RESTORING FROM A LOG
